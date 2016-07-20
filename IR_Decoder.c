@@ -22,90 +22,87 @@
 #include <XC.h>
 #include "IR_Decoder.h"
 
-/* RC5 Decoding status variables */
-static uint32 RC5_DECODER_code = 0;
-static uint16 RC5_DECODER_timeoutTimer = 0; // Timeout timer, unit [ms]
-static bool RC5_DECODE_ready = FALSE;
-volatile RC5_DECODE RC5_Decode; // Global structure to store RC5 Decoder data
+/* NEC Decoding status variables */
+static uint32_t NEC_DECODER_code = 0;
+static uint16_t NEC_DECODER_timeoutTimer = 0; // Timeout timer, unit [ms]
+static uint8_t NEC_DECODE_ready = FALSE;
+volatile APPLE_DECODE NEC_Decode; // Global structure to store NEC Decoder data
 
 /*****************************************************************************/
-/* RC5_DECODER_init                                                          */
+/* NEC_DECODER_init                                                          */
 /*                                                                           */
 /* Call once at startup                                                      */
 /*                                                                           */
 /* Return:  Nothing                                                          */
 
 /*****************************************************************************/
-void RC5_DECODER_init(void) {
-    uint8 dummy;
+void NEC_DECODER_init(void) {
+    uint8_t dummy;
     
-    RC5_DECODER_TRISx = 1; // Configure as input
-    RC5_DECODER_ANSx = 0; // Disable analog function
-    RC5_DECODER_IOCxP = 1; // Enable positive edge detect
-    RC5_DECODER_IOCxN = 1; // Enable negative edge detect
-    RC5_DECODER_WPUx = 1; // Enable weak pull-up
+    NEC_DECODER_TRISx = 1; // Configure as input
+    NEC_DECODER_ANSx = 0; // Disable analog function
+    NEC_DECODER_IOCxP = 1; // Enable positive edge detect
+    NEC_DECODER_IOCxN = 1; // Enable negative edge detect
+    NEC_DECODER_WPUx = 1; // Enable weak pull-up
     //OPTION_REG = 0x06; // Global Pull ups enabled, TMR0 = ON, 1:128 prescaler for 16MHz Fosc
-    dummy = RC5_GetPin(); // Clear mismatch
-    RC5_DECODER_IOCxF = 0; // Clear IOCx interrupt flag
+    dummy = NEC_GetPin(); // Clear mismatch
+    NEC_DECODER_IOCxF = 0; // Clear IOCx interrupt flag
 }
 
 /*****************************************************************************/
-/* RC5_CodeReady                                                             */
+/* NEC_CodeReady                                                             */
 /*                                                                           */
-/* Returns status if a new RC5 code has been received.                       */
+/* Returns status if a new NEC code has been received.                       */
 /*                                                                           */
-/* Return:  TRUE if new RC5 code is available, FALSE otherwise.              */
-
+/* Return:  TRUE if new NEC code is available, FALSE otherwise.              */
 /*****************************************************************************/
-bool RC5_DECODER_codeReady(void) {
-    bool rc;
-    rc = RC5_DECODE_ready;
-    RC5_DECODE_ready = FALSE;
-    return (rc);
+uint8_t NEC_DECODER_codeReady(void) {
+    uint8_t nec;
+    nec = NEC_DECODE_ready;
+    NEC_DECODE_ready = FALSE;
+    return (nec);
 }
 
 /*****************************************************************************/
-/* RC5_GetCode                                                               */
+/* NEC_GetCode                                                               */
 /*                                                                           */
-/* Returns received RC5 code. Use RC5_CodeReady() function first to see if   */
+/* Returns received NEC code. Use NEC_CodeReady() function first to see if   */
 /* a valid code is available.                                                */
 /*                                                                           */
-/* Return:  rc5_code    RC5 code.                                            */
-
+/* Return:  nec_code    NEC code.                                            */
 /*****************************************************************************/
-uint16 RC5_DECODER_getCode(void) {
-    return (RC5_DECODER_code);
+uint32_t NEC_DECODER_getCode(void) {
+    return (NEC_DECODER_code);
 }
 
 /*****************************************************************************/
-/* RC5_TimeoutIncrement                                                      */
+/* NEC_TimeoutIncrement                                                      */
 /*                                                                           */
-/* Function increments timeout counter to detect a RC5 timeout and           */
-/* resynchronize the RC5 decoding state machine.                             */
+/* Function increments timeout counter to detect a NEC timeout and           */
+/* resynchronize the NEC decoding state machine.                             */
 /* Functions shall be called cyclically in main loop or in a timer           */
 /* interrupt overflow routine which is called at around every 1ms.           */
 /*                                                                           */
 /* NOTE: Decoding will also work without calling this function, but          */
-/*       it could happen that RC5 codes are sometimes not getting recognized */
-/*       because of decoding state machine sticks due to erroneous RC5       */
+/*       it could happen that NEC codes are sometimes not getting recognized */
+/*       because of decoding state machine sticks due to erroneous NEC       */
 /*       signal.                                                             */
 /*                                                                           */
 /* Return:  none                                                             */
-
 /*****************************************************************************/
-void RC5_DECODER_timeoutIncrement(void) {
-    static uint8 old_timer;
-    uint8 timer;
+void NEC_DECODER_timeoutIncrement(void) {
+    static uint8_t old_timer;
+    uint8_t timer;
 
     /* get current timer value */
-    timer = RC5_GetTimer();
+    timer = NEC_GetTimer();
 
-    /* disable interrupts since rc5_timeout_timer is also read and written to in ISR */
+    /* disable interrupts since nec_timeout_timer is also read and written to in ISR */
     disable_interrupts(GLOBAL);
     //INTCONbits.GIE = 0;
 
-    if (RC5_DECODER_timeoutTimer < RC5_TIMEOUT) {
-        RC5_DECODER_timeoutTimer += (timer - old_timer);
+    if (NEC_DECODER_timeoutTimer < NEC_TIMEOUT) {
+        NEC_DECODER_timeoutTimer += (timer - old_timer);
     }
 
     /* re-enable interrupts again */
@@ -116,85 +113,85 @@ void RC5_DECODER_timeoutIncrement(void) {
 }
 
 /*****************************************************************************/
-/* RC5_InterruptHandler                                                      */
+/* NEC_InterruptHandler                                                      */
 /*                                                                           */
-/* Interrupt handler for RC5 decoding. This function must be called by an    */
+/* Interrupt handler for NEC decoding. This function must be called by an    */
 /* "Interrupt-On-Change" interrupt service routine.                          */
 /*                                                                           */
 /* Return:  none                                                             */
 
 /*****************************************************************************/
-void RC5_DECODER_interruptHandler(void) {
-    static uint8 rc5_timer = 0;
-    static uint8 rc5_pos = 0;
-    static uint32 rc5_code_tmp = 0;
-    static bool rc5_wait_start = TRUE;
-    static bool rc5_wait_space = TRUE;
-    //static bool rc5_bit_state = RC5_BIT_STATE_FULL;
-    static bool rc5_pin_old = TRUE;
-    bool rc5_rx_last = FALSE;
-    bool rc5_pin;
-    uint8 tdiff;
+void NEC_DECODER_interruptHandler(void) {
+    static uint8_t nec_timer = 0;
+    static uint8_t nec_pos = 0;
+    static uint32_t nec_code_tmp = 0;
+    static uint8_t nec_pin_old = TRUE;
+    uint8_t nec_rx_last = FALSE;
+    uint8_t nec_pin;
+    uint8_t tdiff;
+	static uint8_t NEC_DECODE_state = STATE_WAIT_PREPULSE;
 
-    /* Signal that RC5 data is not valid (yet) */
-    RC5_Decode.valid = FALSE;
+    /* Signal that Apple remote data is not valid (yet) */
+    NEC_Decode.valid = FALSE;
 
-    /* get RC5 pin status */
-    rc5_pin = RC5_GetPin();
+    /* get NEC pin status */
+    nec_pin = NEC_GetPin();
 
     /* calculate time difference to last interrupt call */
-    tdiff = RC5_GetTimer() - rc5_timer;
+    tdiff = NEC_GetTimer() - nec_timer;
 
     /* start the RC5 timer again */
-    rc5_timer = RC5_GetTimer();
+    nec_timer = NEC_GetTimer();
 
-    /* if timeout counter has expired, i.e. no RC5 signal was received for some */
+    /* if timeout counter has expired, i.e. no NEC signal was received for some */
     /* time, reset the state machine */
-    if (RC5_DECODER_timeoutTimer >= RC5_TIMEOUT) {
-        rc5_wait_start = TRUE;
+    if (NEC_DECODER_timeoutTimer >= NEC_TIMEOUT) {
+        nec_wait_start = TRUE;
     }
     /* reset the timeout counter */
-    RC5_DECODER_timeoutTimer = 0;
+    NEC_DECODER_timeoutTimer = 0;
 
-    if ((rc5_wait_start != FALSE) && (rc5_pin_old == FALSE) && (rc5_pin != FALSE)) {     // wait for the header, rising edge
-      if (tdiff >= RC5_PREPULSE)
-      {
-            rc5_wait_start = FALSE; // leave wait state
-      }
-    }
-    else if ((rc5_wait_start == FALSE) && (rc5_wait_space != FALSE)) { // wait for the space
-      {
-        if (tdiff >= RC5_SPACE){
-          rc5_wait_space = FALSE;
-          RC5_DECODER_code = 0;
-          rc5_pos = 0;
-        }
-        else
-          rc5_wait_start = TRUE;
-      }
-    }
-    else if ((rc5_wait_start == FALSE) && (rc5_wait_space == FALSE)) {   // start receiving the actual data
-        /* rising edge of RC5 signal */
-        if ((rc5_pin_old == FALSE) && (rc5_pin != FALSE)) {
-          //rc5_timer = RC5_GetTimer();
-        }
-        /* falling edge of RC5 signal */
-        if ((rc5_pin_old != FALSE) && (rc5_pin == FALSE)) {
-          rc5_pos++;
-          RC5_DECODER_code <<= 1;
-          if (tdiff >= RC5_BIT)
-            RC5_DECODER_code |= 1;
-        }
+	switch (NEC_DECODE_state) {
+		case STATE_WAIT_PREPULSE:
+    		if ((nec_pin_old == FALSE) && (nec_pin != FALSE)) {     // if a rising edge (end of prepulse)
+				if (tdiff >= NEC_PREPULSE)
+			    {
+            		NEC_DECODE_state = STATE_WAIT_SPACE;
+			    }
+		    }
+		    break;
+		case STATE_WAIT_SPACE:
+	        if (tdiff >= NEC_SPACE) {	// if the space is the correct length
+	        	NEC_DECODE_state = STATE_READING_DATA;
+		        NEC_DECODER_code = 0;
+          		nec_pos = 0;
+	        }
+	        else {		// otherwise go back to waiting for the prepulse
+	        	NEC_DECODE_state = STATE_WAIT_PREPULSE;
+	        }
+	        break;
+	    case STATE_READING_DATA:
+	        /* do nothing on rising edge of NEC signal */
+	        /* clock in bits on falling edge of NEC signal */
+	        if ((nec_pin_old != FALSE) && (nec_pin == FALSE)) {
+       			nec_pos++;
+          		NEC_DECODER_code <<= 1;
+          		if (tdiff >= NEC_BIT) {	// long pulses are ones; otherwise low bit is already zero
+		            NEC_DECODER_code |= 1;
+		        }
+		    }
+		    break;
+		default:
+			break;
     }
 
-    /* save current pin state for edge detection */
-    rc5_pin_old = rc5_pin;
+    /* save current pin state for edge type detection */
+    nec_pin_old = nec_pin;
 
-    /* if all RC5 bits have been received */
-    if (rc5_pos == 32) {
-        RC5_Decode.valid = TRUE; // Signal that valid RC5 data was loaded
-        rc5_wait_start = TRUE;
-        rc5_wait_space = TRUE;
-        rc5_pos = 0;
+    /* if all NEC bits have been received */
+    if (nec_pos == 32) {
+        NEC_Decode.valid = TRUE; // Signal that valid NEC data was loaded
+        NEC_DECODE_state = STATE_WAIT_PREPULSE;
+        nec_pos = 0;
     }
 }
