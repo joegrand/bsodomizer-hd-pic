@@ -40,6 +40,22 @@
 // Timer 0 used for time measurement of RC5 signal
 #define RC5_GetTimer() TMR0
 
+/**************************************************************************
+************************** Typedefs ***************************************
+***************************************************************************/
+
+typedef enum	// 7-bit command 
+{
+  APPLE_UP = 0x05,
+  APPLE_DOWN = 0x06,
+  APPLE_LEFT = 0x04,
+  APPLE_RIGHT = 0x03,
+  APPLE_CENTER = 0x02,
+  APPLE_MENU = 0x01,
+
+} apple_cmd_type;
+
+
 /*--- RC5 Decoder data structure ---*/
 
 typedef struct {

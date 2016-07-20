@@ -9,7 +9,11 @@
 // Distributed under a Creative Commons Attribution 3.0 United States license
 // http://creativecommons.org/licenses/by/3.0/us/ 
 //
-// Protocol details from:
+// Original structure and inspiration:
+// http://www.embeddedcodesource.com/codesnippet/ir-remote-control-philips-rc5-
+// protocol-encoder-decoder
+
+// NEC/Apple Remote protocol details:
 // http://techdocs.altium.com/display/FPGA/NEC+Infrared+Transmission+Protocol
 // https://en.wikipedia.org/wiki/Apple_Remote
 // https://hifiduino.wordpress.com/apple-aluminum-remote/
