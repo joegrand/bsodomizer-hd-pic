@@ -33,7 +33,7 @@ struct time_struct
 } gClock = {0, 0, 0};  // Current time
 
 // ADC
-uint8_t adc_vbat = 42;  // Current battery voltage (in 0.1V increments)
+uint16_t adc_vbat;  // Current battery voltage: VBAT = (adc_vbat / 1023) * 3.0 * 1.4
 
 // Flags
 volatile button_state_type 	gSW = SW_NONE;   // state of buttons (debounced)
@@ -47,7 +47,7 @@ void interrupt isr(void)
 {
   if (TMR0IF == 1)  // Timer 0: RC5 decoding (interrupt every 32.6ms)
   {
-    TMR0IF = 0;       // Clear the interrupt flag
+    TMR0IF = 0; // Clear the interrupt flag
   }
     
   if (TMR1IF == 1)  // Timer 1: Accurate clock/timing (interrupt every 2 seconds)
@@ -105,6 +105,18 @@ void main(void)
     check_ir();      // check for a properly decoded IR RC5 packet    
     check_buttons();  // check current state of buttons/DIP switches and set gSW accordingly
     change_mode();    // change system state, if necessary
+    
+    adc_vbat = get_adc();
+    if (adc_vbat >= ADC_VBAT_MINIMUM) // Ensure battery is sufficiently charged to provide power to FPGA circuitry
+    {
+      if (!SW_TEST)
+      {
+        __delay_ms(50);
+        if (!SW_TEST)
+          nEN_FPGA = LOW;
+      }
+    }
+    nEN_FPGA = HIGH;
     
     /*if (RC5_Decode.valid == TRUE) 
       RC5_Decode.valid = FALSE; // Clear flag*/
@@ -240,7 +252,7 @@ void hardware_init(void) 	// Configure hardware to a known state
   RC7 = LOW;
   
 	// set default pin states
-	EN_FPGA = LOW;
+	nEN_FPGA = HIGH; // active low
 
   // disable unused peripherals
   CLKRCON = 0x00;   // reference clock
@@ -335,11 +347,10 @@ void timer1_on(void)	// Enable Timer 1
  ************************ ADC *****************************
  **********************************************************/
 
-uint8_t get_vbat(void)   // read battery voltage via ADC
+uint16_t get_adc(void)   // read voltage on ADC input
 {
   uint8_t   i;
 	uint16_t  adc_value;		// ADC result (10-bit)
-	//double    real_vbat;
 
   ADCON0bits.ADON = 1;    // turn on the ADC
 
@@ -354,15 +365,6 @@ uint8_t get_vbat(void)   // read battery voltage via ADC
 
   ADCON0bits.ADON = 0;  // turn ADC off to save power
 
-  // set upper and lower bounds for A/D value
-	/*if (adc_value > ADC_BOUND_UPPER) adc_value = ADC_BOUND_UPPER;
-	else if (adc_value < ADC_BOUND_LOWER) adc_value = ADC_BOUND_LOWER;
-
-  // convert ADC value to actual voltage
-  real_vbat = 173.94 - (adc_value * 0.1889); // using slope-intercept equation from temperature look-up spreadsheet
-
-  i = (uint8_t)real_vbat;   // cast to integer (discard the fractional component)
-  return i;*/
   return adc_value;
 }
 

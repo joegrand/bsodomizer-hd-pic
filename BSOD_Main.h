@@ -55,16 +55,11 @@
 #define SW_DIP1     RB5		// Input
 #define SW_DIP0     RB6   // Input
 #define SW_TEST     RB7		// Input
-#define EN_FPGA     RC0		// Output
+#define nEN_FPGA    RC0		// Output
 
 // ADC
-// adc_value = (Rt / (Rt + 10000)) * 1023
-// Rt = ((adc_value / 1023) * 10000) / (1 - (adc_value / 1023))
-/*#define ADC_BOUND_UPPER     750     // 32 F (0 C)
-#define ADC_BOUND_LOWER     396     // 99 F (37.2 C)*/
-
-// Timer 0
-#define TMR0_LOAD   100
+// adc_value = (VBAT / 1.4) / 3.0 * 1023
+#define ADC_VBAT_MINIMUM    950 //   LTC3605 Step-Down Regulators on C5G require minimum 4V input
 
 // Timer 1
 // load value = 65536 - (overflow_time / (1/32768))
@@ -123,6 +118,6 @@ void check_ir(void);
 void timer1_off(void);
 void timer1_on(void);
 
-uint8_t get_vbat(void);
+uint16_t get_adc(void);
 
 #endif /* __BSOD_MAIN_H__ */
