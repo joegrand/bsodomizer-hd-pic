@@ -12,6 +12,8 @@
 // http://creativecommons.org/licenses/by/3.0/us/ 
 //
 
+#include <XC.h>
+#include <stdint.h>
 #include "BSOD_Main.h"
 #include "IR_Decoder.h"
 
@@ -82,10 +84,10 @@ void interrupt isr(void)
     if (IOCBF)  // Pushbutton/DIP switches
       IOCBF = 0;  // Clear all port B interrupt flags
     
-    if (RC5_DECODER_IOCxF)  // IR Decoder
+    if (NEC_DECODER_IOCxF)  // IR Decoder
     {
-        RC5_DECODER_interruptHandler(); // IR Decoder processing
-        RC5_DECODER_IOCxF = 0;          // Clear IOC flag
+        NEC_DECODER_interruptHandler(); // IR Decoder processing
+        NEC_DECODER_IOCxF = 0;          // Clear IOC flag
     }
   }
 }
@@ -96,27 +98,25 @@ void interrupt isr(void)
  ***************************************************************************/
 
 void main(void)
-{
+{ 
 	hardware_init();	  // initialize hardware
-  RC5_DECODER_init(); // initialize RC5 decoder
+  NEC_DECODER_init(); // initialize NEC/Apple Remote IR decoder
 
   while(1)
 	{   
-    check_ir();      // check for a properly decoded IR RC5 packet    
+    check_ir();       // check for a properly decoded packet from the Apple Remote
     check_buttons();  // check current state of buttons/DIP switches and set gSW accordingly
     change_mode();    // change system state, if necessary
     
-    adc_vbat = get_adc();
+    /*adc_vbat = get_adc();
     if (adc_vbat >= ADC_VBAT_MINIMUM) // Ensure battery is sufficiently charged to provide power to FPGA circuitry
     {
-      if (!SW_TEST)
-      {
-        __delay_ms(50);
-        if (!SW_TEST)
-          nEN_FPGA = LOW;
-      }
+      nEN_FPGA = LOW;
     }
-    nEN_FPGA = HIGH;
+    else
+    { 
+      nEN_FPGA = HIGH;
+    }*/
     
     /*if (RC5_Decode.valid == TRUE) 
       RC5_Decode.valid = FALSE; // Clear flag*/
@@ -136,7 +136,7 @@ void main(void)
 		}*/
 
 #ifndef __BSOD_DEBUG
-    SLEEP();  // sleep after every pass to minimize current use (will wake on the next interrupt)
+    //SLEEP();  // sleep after every pass to minimize current use (will wake on the next interrupt)
 #endif
 	}			
 }
@@ -145,22 +145,13 @@ void main(void)
 
 void check_ir(void) 
 {
-    byte count;
-    uint16 stream;
-    static uint16 RC5decode;
-
-     // Check if new data is available
-    /*if (RC5_DECODER_codeReady()) 
-    {
-        RC5decode = RC5_DECODER_getCode(); // Grab the Rx data bit stream
-        RC5_Decode.toggle = RC5_DECODER_getToggleBit(RC5decode);
-        RC5_Decode.address = RC5_DECODER_getDeviceAddr(RC5decode);
-        RC5_Decode.command = RC5_DECODER_getCmd(RC5decode);
-        
+    // Check if data is available
+    if (NEC_Decode.valid == TRUE) 
+    {        
         NOP(); // *** SET BREAKPOINT HERE & monitor the RC5_Decode structure ***
-    }*/
+    }
     
-    RC5_DECODER_timeoutIncrement(); // update RC5 decoder timeout timer
+    NEC_DECODER_timeoutIncrement(); // update RC5 decoder timeout timer
 }
 
 /**************************************************************/
@@ -252,7 +243,7 @@ void hardware_init(void) 	// Configure hardware to a known state
   RC7 = LOW;
   
 	// set default pin states
-	nEN_FPGA = HIGH; // active low
+	nEN_FPGA = HIGH;  // active low
 
   // disable unused peripherals
   CLKRCON = 0x00;   // reference clock
@@ -316,7 +307,7 @@ void hardware_init(void) 	// Configure hardware to a known state
   ADCON1bits.ADPREF = 0b00; // Vref+ = VDD
   ADCON1bits.ADNREF = 0;    // Vref- = VSS
   ADCON1bits.ADFM = 1;      // Right justified
-  ADCON1bits.ADCS = 0b000;  // Conversion clock: Internal (Fosc / 2), Tad = 1 / (4000000 / 2) = 0.5uS
+  ADCON1bits.ADCS = 0b001;  // Conversion clock: Internal (Fosc / 8), Tad = 2uS
   ADIE = 0;                 // Disable interrupt
 		
 	// enable interrupts
@@ -329,10 +320,10 @@ void hardware_init(void) 	// Configure hardware to a known state
  ****************************** Timer/Clock *********************************
  ***************************************************************************/
 
-void timer1_off(void)	// Disable Timer 1
+/*void timer1_off(void)	// Disable Timer 1
 {
   T1CONbits.TMR1ON = 0;
-}
+}*/
 
 /**************************************************************/
 
@@ -372,4 +363,5 @@ uint16_t get_adc(void)   // read voltage on ADC input
 /****************************************************************************
  ************************ Utility Functions *********************************
  ***************************************************************************/
+
 

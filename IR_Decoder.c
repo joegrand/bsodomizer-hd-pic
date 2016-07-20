@@ -20,6 +20,8 @@
 //
 
 #include <XC.h>
+#include <stdint.h>
+#include "BSOD_Main.h"
 #include "IR_Decoder.h"
 
 /* NEC Decoding status variables */
@@ -27,6 +29,7 @@ static uint32_t NEC_DECODER_code = 0;
 static uint16_t NEC_DECODER_timeoutTimer = 0; // Timeout timer, unit [ms]
 static uint8_t NEC_DECODE_ready = FALSE;
 volatile APPLE_DECODE NEC_Decode; // Global structure to store NEC Decoder data
+
 
 /*****************************************************************************/
 /* NEC_DECODER_init                                                          */
@@ -39,41 +42,16 @@ volatile APPLE_DECODE NEC_Decode; // Global structure to store NEC Decoder data
 void NEC_DECODER_init(void) {
     uint8_t dummy;
     
-    NEC_DECODER_TRISx = 1; // Configure as input
-    NEC_DECODER_ANSx = 0; // Disable analog function
-    NEC_DECODER_IOCxP = 1; // Enable positive edge detect
-    NEC_DECODER_IOCxN = 1; // Enable negative edge detect
-    NEC_DECODER_WPUx = 1; // Enable weak pull-up
+    NEC_DECODER_TRISx = 1;  // Configure as input
+    NEC_DECODER_ANSx = 0;   // Disable analog function
+    NEC_DECODER_IOCxP = 1;  // Enable positive edge detect
+    NEC_DECODER_IOCxN = 1;  // Enable negative edge detect
+    NEC_DECODER_WPUx = 1;   // Enable weak pull-up
     //OPTION_REG = 0x06; // Global Pull ups enabled, TMR0 = ON, 1:128 prescaler for 16MHz Fosc
-    dummy = NEC_GetPin(); // Clear mismatch
-    NEC_DECODER_IOCxF = 0; // Clear IOCx interrupt flag
+    dummy = NEC_GetPin();   // Clear mismatch
+    NEC_DECODER_IOCxF = 0;  // Clear IOCx interrupt flag
 }
 
-/*****************************************************************************/
-/* NEC_CodeReady                                                             */
-/*                                                                           */
-/* Returns status if a new NEC code has been received.                       */
-/*                                                                           */
-/* Return:  TRUE if new NEC code is available, FALSE otherwise.              */
-/*****************************************************************************/
-uint8_t NEC_DECODER_codeReady(void) {
-    uint8_t nec;
-    nec = NEC_DECODE_ready;
-    NEC_DECODE_ready = FALSE;
-    return (nec);
-}
-
-/*****************************************************************************/
-/* NEC_GetCode                                                               */
-/*                                                                           */
-/* Returns received NEC code. Use NEC_CodeReady() function first to see if   */
-/* a valid code is available.                                                */
-/*                                                                           */
-/* Return:  nec_code    NEC code.                                            */
-/*****************************************************************************/
-uint32_t NEC_DECODER_getCode(void) {
-    return (NEC_DECODER_code);
-}
 
 /*****************************************************************************/
 /* NEC_TimeoutIncrement                                                      */
@@ -98,19 +76,19 @@ void NEC_DECODER_timeoutIncrement(void) {
     timer = NEC_GetTimer();
 
     /* disable interrupts since nec_timeout_timer is also read and written to in ISR */
-    disable_interrupts(GLOBAL);
-    //INTCONbits.GIE = 0;
+    GIE = 0;
 
-    if (NEC_DECODER_timeoutTimer < NEC_TIMEOUT) {
+    if (NEC_DECODER_timeoutTimer < NEC_TIMEOUT) 
+    {
         NEC_DECODER_timeoutTimer += (timer - old_timer);
     }
 
     /* re-enable interrupts again */
-    enable_interrupts(GLOBAL);
-    //INTCONbits.GIE = 1;
+    GIE = 1;
 
     old_timer = timer;
 }
+
 
 /*****************************************************************************/
 /* NEC_InterruptHandler                                                      */
@@ -121,15 +99,14 @@ void NEC_DECODER_timeoutIncrement(void) {
 /* Return:  none                                                             */
 
 /*****************************************************************************/
-void NEC_DECODER_interruptHandler(void) {
+void NEC_DECODER_interruptHandler(void) 
+{
     static uint8_t nec_timer = 0;
     static uint8_t nec_pos = 0;
-    static uint32_t nec_code_tmp = 0;
     static uint8_t nec_pin_old = TRUE;
-    uint8_t nec_rx_last = FALSE;
     uint8_t nec_pin;
     uint8_t tdiff;
-	static uint8_t NEC_DECODE_state = STATE_WAIT_PREPULSE;
+    static uint8_t NEC_DECODE_state = STATE_WAIT_PREPULSE;
 
     /* Signal that Apple remote data is not valid (yet) */
     NEC_Decode.valid = FALSE;
@@ -145,52 +122,61 @@ void NEC_DECODER_interruptHandler(void) {
 
     /* if timeout counter has expired, i.e. no NEC signal was received for some */
     /* time, reset the state machine */
-    if (NEC_DECODER_timeoutTimer >= NEC_TIMEOUT) {
-        nec_wait_start = TRUE;
+    if (NEC_DECODER_timeoutTimer >= NEC_TIMEOUT) 
+    {
+        NEC_DECODE_state = STATE_WAIT_PREPULSE;
     }
     /* reset the timeout counter */
     NEC_DECODER_timeoutTimer = 0;
 
-	switch (NEC_DECODE_state) {
-		case STATE_WAIT_PREPULSE:
-    		if ((nec_pin_old == FALSE) && (nec_pin != FALSE)) {     // if a rising edge (end of prepulse)
-				if (tdiff >= NEC_PREPULSE)
-			    {
-            		NEC_DECODE_state = STATE_WAIT_SPACE;
-			    }
-		    }
-		    break;
-		case STATE_WAIT_SPACE:
-	        if (tdiff >= NEC_SPACE) {	// if the space is the correct length
-	        	NEC_DECODE_state = STATE_READING_DATA;
-		        NEC_DECODER_code = 0;
-          		nec_pos = 0;
-	        }
-	        else {		// otherwise go back to waiting for the prepulse
-	        	NEC_DECODE_state = STATE_WAIT_PREPULSE;
-	        }
-	        break;
-	    case STATE_READING_DATA:
-	        /* do nothing on rising edge of NEC signal */
-	        /* clock in bits on falling edge of NEC signal */
-	        if ((nec_pin_old != FALSE) && (nec_pin == FALSE)) {
-       			nec_pos++;
-          		NEC_DECODER_code <<= 1;
-          		if (tdiff >= NEC_BIT) {	// long pulses are ones; otherwise low bit is already zero
-		            NEC_DECODER_code |= 1;
-		        }
-		    }
-		    break;
-		default:
-			break;
+    switch (NEC_DECODE_state) 
+    {
+      case STATE_WAIT_PREPULSE:
+        if ((nec_pin_old == FALSE) && (nec_pin != FALSE)) // if a rising edge (end of prepulse)
+        {     
+          if (tdiff >= NEC_PREPULSE)
+          {
+            NEC_DECODE_state = STATE_WAIT_SPACE;
+          }
+        }
+        break;
+      case STATE_WAIT_SPACE:
+        if (tdiff >= NEC_SPACE) // if the space is the correct length
+        {	
+          NEC_DECODE_state = STATE_READING_DATA;
+          NEC_DECODER_code = 0;
+          nec_pos = 0;
+         }
+         else // otherwise go back to waiting for the prepulse
+         {		
+              NEC_DECODE_state = STATE_WAIT_PREPULSE;
+         }
+         break;
+        case STATE_READING_DATA:
+          /* do nothing on rising edge of NEC signal */
+          /* clock in bits on falling edge of NEC signal */
+          if ((nec_pin_old != FALSE) && (nec_pin == FALSE)) 
+          {
+            nec_pos++;
+            NEC_DECODER_code <<= 1;
+            if (tdiff >= NEC_BIT) // long pulses are ones; otherwise low bit is already zero
+            {	
+              NEC_DECODER_code |= 1;
+            }
+          }
+          break;
+      default:
+        break;
     }
 
     /* save current pin state for edge type detection */
     nec_pin_old = nec_pin;
 
     /* if all NEC bits have been received */
-    if (nec_pos == 32) {
+    if (nec_pos == 32) 
+    {
         NEC_Decode.valid = TRUE; // Signal that valid NEC data was loaded
+        NEC_Decode.command = NEC_DECODER_getCmd(NEC_DECODER_code); // Populate command from Apple Remote (ignore the rest of the bits)
         NEC_DECODE_state = STATE_WAIT_PREPULSE;
         nec_pos = 0;
     }

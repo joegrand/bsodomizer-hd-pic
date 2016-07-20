@@ -10,11 +10,10 @@
 // http://creativecommons.org/licenses/by/3.0/us/ 
 //
 
+#include <stdint.h>
+
 #ifndef __BSOD_MAIN_H__
 #define __BSOD_MAIN_H__
-
-#include <XC.h>
-#include <stdint.h>
 
 #define __BSOD_DEBUG             // #define for debug capability
 #define _XTAL_FREQ  4000000     // oscillator frequency for __delay_xx() macros
