@@ -1,9 +1,8 @@
 //
 // BSODomizer HD
-// Copyright (c) 2016 Grand Idea Studio, Inc.
 //
 // Filename: 	BSOD_Main.h
-// Author: 	  Joe Grand [www.grandideastudio.com]
+// Author: 	  Joe Grand [www.grandideastudio.com] and Zoz
 //
 // Description: Header file for the BSODomizer HD Front End Subsystem
 //
@@ -17,7 +16,7 @@
 #include <XC.h>
 #include <stdint.h>
 
-#define __DEBUG                 // #define for debug capability
+#define __BSOD_DEBUG             // #define for debug capability
 #define _XTAL_FREQ  4000000     // oscillator frequency for __delay_xx() macros
 
 /**************************************************************************
@@ -35,7 +34,7 @@
 #pragma config IESO = OFF       // Internal/External Switchover (Internal/External Switchover mode is disabled)
 #pragma config FCMEN = OFF      // Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor is disabled)
 
-#ifdef __DEBUG
+#ifdef __BSOD_DEBUG
   #pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled)
 #else
   #pragma config PWRTE = ON       // Power-up Timer Enable (PWRT enabled)
@@ -63,6 +62,9 @@
 // Rt = ((adc_value / 1023) * 10000) / (1 - (adc_value / 1023))
 /*#define ADC_BOUND_UPPER     750     // 32 F (0 C)
 #define ADC_BOUND_LOWER     396     // 99 F (37.2 C)*/
+
+// Timer 0
+#define TMR0_LOAD   100
 
 // Timer 1
 // load value = 65536 - (overflow_time / (1/32768))
@@ -116,11 +118,11 @@ typedef enum 	// state of the buttons
 void hardware_init(void);
 void check_buttons(void);
 void change_mode(void);
-void check_rc5(void);
+void check_ir(void);
 
 void timer1_off(void);
 void timer1_on(void);
 
 uint8_t get_vbat(void);
 
-#endif /* __BSOD_MAIN__ */
+#endif /* __BSOD_MAIN_H__ */

@@ -1,9 +1,8 @@
 //
 // BSODomizer HD
-// Copyright (c) 2016 Grand Idea Studio, Inc.
 //
 // Filename: 	BSOD_Main.c
-// Author: 	  Joe Grand [www.grandideastudio.com]
+// Author: 	  Joe Grand [www.grandideastudio.com] and Zoz
 //
 // Description: Main file for the BSODomizer HD Front End Subsystem
 // Processor: 	Microchip PIC16LF1828
@@ -14,7 +13,7 @@
 //
 
 #include "BSOD_Main.h"
-#include "RC5_Decoder.h"
+#include "IR_Decoder.h"
 
 
 /****************************************************************************
@@ -46,9 +45,14 @@ volatile button_state_type 	gSW = SW_NONE;   // state of buttons (debounced)
 
 void interrupt isr(void)
 {
+  if (TMR0IF == 1)  // Timer 0: RC5 decoding (interrupt every 32.6ms)
+  {
+    TMR0IF = 0;       // Clear the interrupt flag
+  }
+    
   if (TMR1IF == 1)  // Timer 1: Accurate clock/timing (interrupt every 2 seconds)
 	{
-    TMR1H = TMR1H_LOAD; // Reload timer 1 overflow time
+    TMR1H = TMR1H_LOAD; // Reload Timer 1 overflow time
     TMR1L = TMR1L_LOAD;
 		TMR1IF = 0;         // Clear the interrupt flag
     ++gCounter; 				// Increment counter
@@ -78,9 +82,9 @@ void interrupt isr(void)
     if (IOCBF)  // Pushbutton/DIP switches
       IOCBF = 0;  // Clear all port B interrupt flags
     
-    if (RC5_DECODER_IOCxF)  // RC5 Decoder
+    if (RC5_DECODER_IOCxF)  // IR Decoder
     {
-        RC5_DECODER_interruptHandler(); // RC5 Decoder processing
+        RC5_DECODER_interruptHandler(); // IR Decoder processing
         RC5_DECODER_IOCxF = 0;          // Clear IOC flag
     }
   }
@@ -97,8 +101,8 @@ void main(void)
   RC5_DECODER_init(); // initialize RC5 decoder
 
   while(1)
-	{
-    check_rc5();      // check for a properly decoded IR RC5 packet    
+	{   
+    check_ir();      // check for a properly decoded IR RC5 packet    
     check_buttons();  // check current state of buttons/DIP switches and set gSW accordingly
     change_mode();    // change system state, if necessary
     
@@ -119,7 +123,7 @@ void main(void)
         break;
 		}*/
 
-#ifndef __DEBUG
+#ifndef __BSOD_DEBUG
     SLEEP();  // sleep after every pass to minimize current use (will wake on the next interrupt)
 #endif
 	}			
@@ -127,16 +131,14 @@ void main(void)
 
 /**************************************************************/
 
-// From Microchip's IR RC5 Transmitter & Receiver demonstration code
-// www.embeddedcodesource.com/codesnippet/ir-remote-control-philips-rc5-protocol-encoder-decoder/
-void check_rc5(void) 
+void check_ir(void) 
 {
     byte count;
     uint16 stream;
     static uint16 RC5decode;
 
      // Check if new data is available
-    if (RC5_DECODER_codeReady()) 
+    /*if (RC5_DECODER_codeReady()) 
     {
         RC5decode = RC5_DECODER_getCode(); // Grab the Rx data bit stream
         RC5_Decode.toggle = RC5_DECODER_getToggleBit(RC5decode);
@@ -144,7 +146,7 @@ void check_rc5(void)
         RC5_Decode.command = RC5_DECODER_getCmd(RC5decode);
         
         NOP(); // *** SET BREAKPOINT HERE & monitor the RC5_Decode structure ***
-    }
+    }*/
     
     RC5_DECODER_timeoutIncrement(); // update RC5 decoder timeout timer
 }
@@ -260,13 +262,14 @@ void hardware_init(void) 	// Configure hardware to a known state
   CPSCON0 = 0x00;   // capacitive sensing
 
 	// timer 0/rtcc
-  // @ 4MHz system clock, timer 0 will overflow every 32uS
+  // @ 4MHz system clock, timer 0 will increment every 128uS and overflow every 32.6ms for full 8-bit count
   // used for time measurement of RC5 signal
   OPTION_REGbits.TMR0CS = 0;  // Clock source: Internal (Fosc / 4)
   OPTION_REGbits.TMR0SE = 0;  // Source edge select: Increment on low-to-high transition on T0CKI pin
-  OPTION_REGbits.PS = 0b100;  // Prescaler: 32
   OPTION_REGbits.PSA = 0;     // Prescaler assigned to Timer 0
-  TMR0IE = 0;
+  OPTION_REGbits.PS = 0b110;  // Prescaler: 128
+  //TMR0 = TMR0_LOAD;           // Set Timer 0 overflow time
+  TMR0IE = 1;                 // Enable interrupt
 
   // timer 1
 	// @ 32.768kHz, timer 1 will increment every 30.5uS and overflow every 2 seconds for full 16-bit count
@@ -275,8 +278,8 @@ void hardware_init(void) 	// Configure hardware to a known state
   T1CONbits.T1OSCEN = 1;    // Enable dedicated Timer 1/LP oscillator circuit
   T1CONbits.nT1SYNC = 1;    // Do not synchronize external clock input
   T1GCON = 0x00;            // Disable gating
-  timer1_on();              // Turn on timer 1
-  TMR1H = TMR1H_LOAD;       // Set timer 1 overflow time
+  timer1_on();              // Turn on Timer 1
+  TMR1H = TMR1H_LOAD;       // Set Timer 1 overflow time
   TMR1L = TMR1L_LOAD;
   TMR1IE = 1;               // Enable interrupt
 
