@@ -37,7 +37,6 @@ uint16_t adc_vbat;  // Current battery voltage: VBAT = (adc_vbat / 1023) * 3.0 *
 
 // Flags
 volatile input_state_type gSW;   // state of inputs (debounced)
-volatile uint8_t ir_decode = FALSE;
 volatile uint8_t ir_trigger = FALSE;
 volatile uint8_t disable_timer = FALSE;
 volatile uint8_t low_battery = FALSE;
@@ -91,8 +90,8 @@ void interrupt isr(void)
     
     if (NEC_DECODER_IOCxF)  // IR Decoder
     {
-        ir_decode = TRUE;
-        NEC_DECODER_IOCxF = 0;          // Clear IOC flag
+      NEC_DECODER_interruptHandler(); // IR Decoder processing
+      NEC_DECODER_IOCxF = 0;          // Clear IOC flag
     }
   }
 }
@@ -143,11 +142,6 @@ void check_ir(void)
 {
   uint8_t timeoffset = 0;
   
-  if (ir_decode == TRUE)
-  {
-    NEC_DECODER_interruptHandler(); // IR Decoder processing
-  }
-  
   // Check if data is available
   if (hasValidDecode() == TRUE) 
   {        
@@ -191,7 +185,6 @@ void check_ir(void)
     }
     
     resetDecode();
-    ir_decode = FALSE;
   }
     
   NEC_DECODER_timeoutIncrement(); // update NEC decoder timeout timer
