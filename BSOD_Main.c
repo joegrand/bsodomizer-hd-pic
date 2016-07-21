@@ -50,10 +50,10 @@ void interrupt isr(void)
 {
   static uint8_t tmr1_toggle = 0;
   
-  /*if (INTF == 1)    // External INT
+  if (INTF == 1)    // External INT
   {
     INTF = 0;
-  }*/
+  }
   
   if (TMR0IE == 1 && TMR0IF == 1)  // Timer 0: RC5 decoding (interrupt every 32.6ms)
   {
@@ -188,8 +188,6 @@ void check_ir(void)
     
     resetDecode();
   }
-    
-  NEC_DECODER_timeoutIncrement(); // update NEC decoder timeout timer
 }
 
 /**************************************************************/

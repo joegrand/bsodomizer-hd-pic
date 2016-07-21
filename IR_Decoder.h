@@ -55,12 +55,12 @@
 
 typedef enum	// 7-bit command 
 {
-  APPLE_UP      = 0x05,
-  APPLE_DOWN    = 0x06,
-  APPLE_LEFT    = 0x04,
-  APPLE_RIGHT   = 0x03,
-  APPLE_CENTER  = 0x02,
-  APPLE_MENU    = 0x01,
+  APPLE_UP      = 0x05,   // Increase trigger time
+  APPLE_DOWN    = 0x06,   // Decrease trigger time
+  APPLE_LEFT    = 0x04,   // Reset and re-enable the timer
+  APPLE_RIGHT   = 0x03,   // Disable the timer
+  APPLE_CENTER  = 0x02,   // Trigger FPGA on/off
+  APPLE_MENU    = 0x01,   // Reserved for future use
 } apple_cmd_type;
 
 /*--- Apple remote data structure ---*/
@@ -79,8 +79,8 @@ typedef struct {
 
 #define NEC_PREPULSE            ((NEC_TICKS_PER_MS) * 8)  // Leading pulse burst is 9ms per NEC spec
 #define NEC_SPACE               ((NEC_TICKS_PER_MS) * 4)  // Following space before data is 4.5ms per NEC spec
-#define NEC_TIMEOUT             ((NEC_TICKS_PER_MS) * 11) // Length of time without receiving data
 #define NEC_BIT                 ((NEC_TICKS_PER_MS))      // Time threshold to determine a '0' (562.5us space) or '1' (1.6875ms space) 
+#define NEC_TIMEOUT             ((NEC_TICKS_PER_MS) * 2)  // Time threshold for too long of a data bit
 
 
 /*****************************************************************************/
@@ -103,7 +103,6 @@ static unsigned char lookup[16] = {0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe, 0x1, 
 
 void NEC_DECODER_init(void);
 uint8_t NEC_DECODER_codeReady(void);
-void NEC_DECODER_timeoutIncrement(void);
 void NEC_DECODER_interruptHandler(void);
 
 /*****************************************************************************/

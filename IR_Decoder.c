@@ -26,7 +26,6 @@
 
 /* NEC Decoding status variables */
 static uint32_t NEC_DECODER_code = 0;
-static uint16_t NEC_DECODER_timeoutTimer = 0; // Timeout timer, unit [ms]
 volatile APPLE_DECODE NEC_Decode; // structure to store NEC Decoder data
 
 
@@ -46,46 +45,9 @@ void NEC_DECODER_init(void) {
     NEC_DECODER_IOCxP = 1;  // Enable positive edge detect
     NEC_DECODER_IOCxN = 1;  // Enable negative edge detect
     NEC_DECODER_WPUx = 1;   // Enable weak pull-up
-    IOCIE = 1;              // Enable interrupt
+    IOCIE = 1;              // Enable interrupt-on-change
     dummy = NEC_GetPin();   // Clear mismatch
     NEC_DECODER_IOCxF = 0;  // Clear IOCx interrupt flag
-}
-
-
-/*****************************************************************************/
-/* NEC_TimeoutIncrement                                                      */
-/*                                                                           */
-/* Function increments timeout counter to detect a NEC timeout and           */
-/* resynchronize the NEC decoding state machine.                             */
-/* Functions shall be called cyclically in main loop or in a timer           */
-/* interrupt overflow routine which is called at around every 1ms.           */
-/*                                                                           */
-/* NOTE: Decoding will also work without calling this function, but          */
-/*       it could happen that NEC codes are sometimes not getting recognized */
-/*       because of decoding state machine sticks due to erroneous NEC       */
-/*       signal.                                                             */
-/*                                                                           */
-/* Return:  none                                                             */
-/*****************************************************************************/
-void NEC_DECODER_timeoutIncrement(void) {
-    static uint8_t old_timer;
-    uint8_t timer;
-
-    /* get current timer value */
-    timer = NEC_GetTimer();
-
-    /* disable interrupts since nec_timeout_timer is also read and written in ISR */
-    GIE = 0;
-
-    if (NEC_DECODER_timeoutTimer < NEC_TIMEOUT) 
-    {
-        NEC_DECODER_timeoutTimer += (timer - old_timer);
-    }
-
-    /* re-enable interrupts again */
-    GIE = 1;
-
-    old_timer = timer;
 }
 
 
@@ -119,18 +81,11 @@ void NEC_DECODER_interruptHandler(void)
     /* start the timer again */
     nec_timer = NEC_GetTimer();
 
-    /* if timeout counter has expired, i.e. no signal was received for some */
-    /* time, reset the state machine */
-    if (NEC_DECODER_timeoutTimer >= NEC_TIMEOUT) 
-    {
-        NEC_DECODE_state = STATE_WAIT_PREPULSE;
-    }
-    /* reset the timeout counter */
-    NEC_DECODER_timeoutTimer = 0;
-
     switch (NEC_DECODE_state) 
     {
       case STATE_WAIT_PREPULSE:
+        NEC_DECODER_code = 0;
+        nec_pos = 0;
         if ((nec_pin_old == FALSE) && (nec_pin != FALSE)) // if a rising edge (end of prepulse)
         {     
           if (tdiff >= NEC_PREPULSE)
@@ -143,8 +98,6 @@ void NEC_DECODER_interruptHandler(void)
         if (tdiff >= NEC_SPACE) // if the space is the correct length
         {	
           NEC_DECODE_state = STATE_READING_DATA;
-          NEC_DECODER_code = 0;
-          nec_pos = 0;
          }
          else // otherwise go back to waiting for the prepulse
          {		
@@ -158,7 +111,11 @@ void NEC_DECODER_interruptHandler(void)
          {
            nec_pos++;
            NEC_DECODER_code <<= 1;
-           if (tdiff >= NEC_BIT) // long pulses are ones; otherwise low bit is already zero
+           if (tdiff >= NEC_TIMEOUT) // if received pulse is too long, we're out of sync so abort
+           {
+             NEC_DECODE_state = STATE_WAIT_PREPULSE;
+           }
+           else if (tdiff >= NEC_BIT) // long pulses are ones; otherwise low bit is already zero
            {	
              NEC_DECODER_code |= 1;
            }
