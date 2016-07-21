@@ -28,7 +28,7 @@
 static uint32_t NEC_DECODER_code = 0;
 static uint16_t NEC_DECODER_timeoutTimer = 0; // Timeout timer, unit [ms]
 static uint8_t NEC_DECODE_ready = FALSE;
-volatile APPLE_DECODE NEC_Decode; // Global structure to store NEC Decoder data
+volatile APPLE_DECODE NEC_Decode; // structure to store NEC Decoder data
 
 
 /*****************************************************************************/
@@ -180,4 +180,19 @@ void NEC_DECODER_interruptHandler(void)
         NEC_DECODE_state = STATE_WAIT_PREPULSE;
         nec_pos = 0;
     }
+}
+
+uint8_t hasValidDecode(void)
+{
+  return NEC_Decode.valid;
+}
+
+apple_cmd_type getAppleCommand(void)
+{
+  return NEC_Decode.command;
+}
+
+void resetDecode(void)
+{
+  NEC_Decode.valid = FALSE;
 }

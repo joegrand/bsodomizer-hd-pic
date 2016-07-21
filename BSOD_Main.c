@@ -146,9 +146,9 @@ void check_ir(void)
   uint8_t timeoffset = 0;
   
   // Check if data is available
-  if (NEC_Decode.valid == TRUE) 
+  if (hasValidDecode() == TRUE) 
   {        
-    switch (NEC_Decode.command)
+    switch (getAppleCommand)
     {
       case APPLE_UP:
       case APPLE_DOWN:
@@ -164,7 +164,7 @@ void check_ir(void)
             timeoffset = 5;
             break;
         }
-        if (NEC_Decode.command == APPLE_UP)
+        if (getAppleCommand == APPLE_UP)
         {
           gClock.minutes += timeoffset;
         }
@@ -186,7 +186,7 @@ void check_ir(void)
       case APPLE_MENU:
         break;
     }
-    NEC_Decode.valid = FALSE;
+    resetDecode;
   }
     
   NEC_DECODER_timeoutIncrement(); // update NEC decoder timeout timer

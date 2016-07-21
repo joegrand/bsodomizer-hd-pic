@@ -70,8 +70,6 @@ typedef struct {
     uint8_t valid;
 } APPLE_DECODE;
 
-extern volatile APPLE_DECODE NEC_Decode;
-
 
 /*****************************************************************************/
 /* NEC timings                                                               */
@@ -107,5 +105,12 @@ void NEC_DECODER_init(void);
 uint8_t NEC_DECODER_codeReady(void);
 void NEC_DECODER_timeoutIncrement(void);
 void NEC_DECODER_interruptHandler(void);
+
+/*****************************************************************************/
+/* External use functions                                                    */
+/*****************************************************************************/
+uint8_t hasValidDecode(void);
+apple_cmd_type getAppleCommand(void);
+void resetDecode(void);
 
 #endif /* __BSOD_IR_H__ */
