@@ -52,7 +52,7 @@
 ***************************************************************************/
 // pin assignments
 #define SW_DIP1     RB5		// Input
-#define SW_DIP0     RB6   // Input
+#define SW_DIP0     RB6     // Input
 #define SW_TEST     RB7		// Input
 #define nEN_FPGA    RC0		// Output
 
@@ -91,19 +91,24 @@
 typedef enum	// operating mode
 {
   START_UP,
-  SET_TIME,
-  CLOCK_MODE
+  TIMER_WAIT,
+  FPGA_ON
 } mode_type;
 
-
-typedef enum 	// state of the buttons
+typedef enum 	// dipswitch values
 {
-  SW_NONE = 0,
-  SW_R    = 1,
-  SW_L    = 2,
-  SW_BOTH = 3
-} button_state_type;
+  SW_NONE  = 0b00,
+  SW_5MIN  = 0b01,
+  SW_10MIN = 0b10,
+  SW_30MIN = 0b11
+} dipswitch_state_type;
 
+typedef struct	// state of the buttons/switches
+{
+	dipswitch_state_type dipswitches;
+	uint8_t button;
+	uint8_t buttonevent;
+} input_state_type;
 
 /***********************************************************************
  ************************** Function prototypes ************************

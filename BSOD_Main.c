@@ -38,7 +38,9 @@ struct time_struct
 uint16_t adc_vbat;  // Current battery voltage: VBAT = (adc_vbat / 1023) * 3.0 * 1.4
 
 // Flags
-volatile button_state_type 	gSW = SW_NONE;   // state of buttons (debounced)
+volatile input_state_type gSW;   // state of inputs (debounced)
+uint8_t ir_trigger = FALSE;
+uint8_t disable_timer = FALSE;
 
 
 /****************************************************************************
@@ -99,41 +101,34 @@ void interrupt isr(void)
 
 void main(void)
 { 
-	hardware_init();	  // initialize hardware
+  hardware_init();	  // initialize hardware
   NEC_DECODER_init(); // initialize NEC/Apple Remote IR decoder
 
   while(1)
-	{   
-    check_ir();       // check for a properly decoded packet from the Apple Remote
+  {   
     check_buttons();  // check current state of buttons/DIP switches and set gSW accordingly
+    check_ir();       // check for a properly decoded packet from the Apple Remote
     change_mode();    // change system state, if necessary
     
-    /*adc_vbat = get_adc();
-    if (adc_vbat >= ADC_VBAT_MINIMUM) // Ensure battery is sufficiently charged to provide power to FPGA circuitry
+    switch (gMode)
     {
-      nEN_FPGA = LOW;
-    }
-    else
-    { 
-      nEN_FPGA = HIGH;
-    }*/
-    
-    /*if (RC5_Decode.valid == TRUE) 
-      RC5_Decode.valid = FALSE; // Clear flag*/
-    
-		/*switch (gMode)
-		{
-		 	case START_UP:
-        if (gSW == SW_R)
-          EN_MOTOR = HIGH;
-        else
-          EN_MOTOR = LOW;
-  			break;	
-		 	case SET_TIME:
-  			break;
-      case CLOCK_MODE:
+      case START_UP:
         break;
-		}*/
+      case TIMER_WAIT:
+        nEN_FPGA = LOW;
+        break;
+      case FPGA_ON:
+        /*adc_vbat = get_adc();
+        if (adc_vbat >= ADC_VBAT_MINIMUM) // Ensure battery is sufficiently charged to provide power to FPGA circuitry
+        {
+          nEN_FPGA = LOW;
+        }
+        else
+        { 
+          nEN_FPGA = HIGH;
+        }*/
+        break;
+    }
 
 #ifndef __BSOD_DEBUG
     //SLEEP();  // sleep after every pass to minimize current use (will wake on the next interrupt)
@@ -145,56 +140,137 @@ void main(void)
 
 void check_ir(void) 
 {
+  uint8_t timeoffset = 0;
+  
     // Check if data is available
     if (NEC_Decode.valid == TRUE) 
     {        
-        NOP(); // *** SET BREAKPOINT HERE & monitor the RC5_Decode structure ***
+      switch (NEC_Decode.command)
+      {
+        case APPLE_UP:
+        case APPLE_DOWN:
+          switch (gSW.dipswitches)
+          {
+            case SW_5MIN:
+              timeoffset = 1;
+              break;
+            case SW_10MIN:
+              timeoffset = 2;
+              break;
+            case SW_30MIN:
+              timeoffset = 5;
+              break;
+          }
+          if (NEC_Decode.command == APPLE_UP)
+          {
+            gClock.minutes += timeoffset;
+          }
+          else
+          {
+            gClock.minutes -= timeoffset;
+          }
+          break;
+        case APPLE_LEFT:
+          gClock = {0, 0, 0};
+          disable_timer = FALSE;
+          break;
+        case APPLE_RIGHT:
+          disable_timer = TRUE;
+          break;
+        case APPLE_CENTER:
+          ir_trigger = TRUE;
+          break;
+        case APPLE_MENU:
+          break;
+      }
+      NEC_Decode.valid = FALSE;
     }
     
-    NEC_DECODER_timeoutIncrement(); // update RC5 decoder timeout timer
+    NEC_DECODER_timeoutIncrement(); // update NEC decoder timeout timer
 }
 
 /**************************************************************/
 
 void check_buttons(void)
 {
-  /*if (!(SW_LEFT && SW_RIGHT))  // one or both of the buttons have been pressed
+  uint8_t dipSW = 0;
+  
+  if (!SW_DIP1) dipSW |= 0b10;
+  if (!SW_DIP0) dipSW |= 0b01;
+  gSW.dipswitches = (dipswitch_state_type)dipSW;
+
+  //debounce the test pushbutton
+  if (!SW_TEST)
   {
     __delay_ms(50);  // debounce delay must be > than worst case switch bounce
-    gSW = (!SW_LEFT << 1) | !SW_RIGHT;   // set global variable accordingly
+    if (gSW.button == SW_TEST)
+    {
+      gSW.buttonevent = TRUE;
+    }
+    gSW.button = !SW_TEST;
   }
   else
-    gSW = SW_NONE;*/
+  {
+    if (gSW.button != SW_TEST)
+    {
+      gSW.buttonevent = TRUE;
+    }
+  	gSW.button = FALSE;
+  }
 }
 
 /**************************************************************/
 
 void change_mode(void)
 {
-  /*switch (gMode)
+  switch (gMode)
   {
    	case START_UP:
-   		if (gSW == SW_L)
-   		{
-   			gMode = SET_TIME;
-   		}	  
+      gClock = {0, 0, 0};
+   	  gMode = TIMER_WAIT;
       break;
-	case SET_TIME:
-   		if (gSW == SW_L)
-   		{
-   			gMode = START_UP;
-   		}
-      else if (gSW == SW_R)
+	case TIMER_WAIT:
+      if ((gSW.buttonevent && gSW.button) || ir_trigger)
       {
-        gMode = CLOCK_MODE;
+        gMode = FPGA_ON;
+        gSW.buttonevent = FALSE;
+        ir_trigger = FALSE;
       }
-    case CLOCK_MODE:
-      if (gSW == SW_BOTH)
+      else if (!disable_timer)
       {
-   			gMode = SET_TIME;
+        switch gSW.dipswitches
+        {
+          case SW_NONE:
+            break;
+          case SW_5MIN:
+            if (gClock.minutes >= 5)
+            {
+              gMode = FPGA_ON;
+            }
+            break;
+          case SW_10MIN:
+            if (gClock.minutes >= 10)
+            {
+              gMode = FPGA_ON;
+            }
+            break;
+          case SW_30MIN:
+            if (gClock.minutes >= 30)
+            {
+              gMode = FPGA_ON;
+            }
+            break;
+        }
+      }
+    case FPGA_ON:
+      if ((gSW.buttonevent && gSW.button) || ir_trigger)
+      {
+        gMode = START_UP;
+        gSW.buttonevent = FALSE;
+        ir_trigger = FALSE;
       }
       break;
- 	}*/
+  }
 }
 
 /**************************************************************/
@@ -217,33 +293,33 @@ void hardware_init(void) 	// Configure hardware to a known state
   INLVLB = 0b11100000;  // RB7..5 Schmitt Trigger, all others TTL
   INLVLC = 0x00;        // All TTL
 
-	// configure GPIO
-	TRISB5 = INPUT; 	// SW_DIP1
+  // configure GPIO
+  TRISB5 = INPUT; 	// SW_DIP1
   TRISB6 = INPUT;   // SW_DIP0
-	TRISB7 = INPUT; 	// SW_TEST
+  TRISB7 = INPUT; 	// SW_TEST
   TRISC2 = INPUT;   // VBAT_IN
-	TRISC0 = OUTPUT;	// EN_FPGA
+  TRISC0 = OUTPUT;	// EN_FPGA
 	
-	// set unused GPIO
+  // set unused GPIO
   TRISA2 = OUTPUT;  // Configured later by RC5_DECODER_init()
   RA2 = LOW;
-	TRISB4 = OUTPUT;
-	RB4 = LOW;
+  TRISB4 = OUTPUT;
+  RB4 = LOW;
   TRISC1 = OUTPUT;
-	RC1 = LOW;
+  RC1 = LOW;
   TRISC3 = OUTPUT;	
-	RC3 = LOW;
+  RC3 = LOW;
   TRISC4 = OUTPUT;	
-	RC4 = LOW;
+  RC4 = LOW;
   TRISC5 = OUTPUT;
-	RC5 = LOW;
+  RC5 = LOW;
   TRISC6 = OUTPUT;	
-	RC6 = LOW;
+  RC6 = LOW;
   TRISC7 = OUTPUT;	
   RC7 = LOW;
   
-	// set default pin states
-	nEN_FPGA = HIGH;  // active low
+  // set default pin states
+  nEN_FPGA = HIGH;  // active low
 
   // disable unused peripherals
   CLKRCON = 0x00;   // reference clock
@@ -297,7 +373,7 @@ void hardware_init(void) 	// Configure hardware to a known state
   IOCBN = 0b11100000;   // Port B, Negative edge detection ([7..5])
   IOCIE = 1;            // Enable interrupt
 
-	// adc
+  // adc
   ANSELA = 0x00;        // Port A: All digital I/O or special function
   ANSELB = 0x00;        // Port B: All digital I/O or special function
   ANSELC = 0b00000100;  // Port C: RC2/AN6 analog, all others digital I/O or special function
@@ -341,18 +417,18 @@ void timer1_on(void)	// Enable Timer 1
 uint16_t get_adc(void)   // read voltage on ADC input
 {
   uint8_t   i;
-	uint16_t  adc_value;		// ADC result (10-bit)
+  uint16_t  adc_value;		// ADC result (10-bit)
 
   ADCON0bits.ADON = 1;    // turn on the ADC
 
   adc_value = 0;
-	for (i = 0; i < 4; ++i)	// take multiple samples & average to reduce noise
-	{
+  for (i = 0; i < 4; ++i)	// take multiple samples & average to reduce noise
+  {
     ADCON0bits.GO_nDONE = 1;                // start conversion
     while (ADCON0bits.GO_nDONE);            // wait here until conversion is complete
     adc_value += ((ADRESH << 8) + ADRESL);  // store A/D value
-	}
-	adc_value >>= 2;      // calculate the average
+  }
+  adc_value >>= 2;      // calculate the average
 
   ADCON0bits.ADON = 0;  // turn ADC off to save power
 
