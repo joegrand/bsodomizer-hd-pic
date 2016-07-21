@@ -29,13 +29,13 @@
 /*****************************************************************************/
 
 // Apple remote receiver sensor connection
-#define NEC_DATA_PIN          RA2
-#define NEC_DECODER_TRISx     TRISA2
-#define NEC_DECODER_ANSx      ANSA2
-#define NEC_DECODER_WPUx      WPUA2
-#define NEC_DECODER_IOCxP     IOCAP2
-#define NEC_DECODER_IOCxN     IOCAN2
-#define NEC_DECODER_IOCxF     IOCAF2
+#define NEC_DATA_PIN          RB4
+#define NEC_DECODER_TRISx     TRISB4
+#define NEC_DECODER_ANSx      ANSB4
+#define NEC_DECODER_WPUx      WPUB4
+#define NEC_DECODER_IOCxP     IOCBP4
+#define NEC_DECODER_IOCxN     IOCBN4
+#define NEC_DECODER_IOCxF     IOCBF4
 
 // Timer 0 is configured to increment every 128.0us (i.e. 1000/128 times per ms)
 #define NEC_TICKS_PER_MS      (1000/128)

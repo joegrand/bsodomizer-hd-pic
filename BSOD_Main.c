@@ -37,9 +37,9 @@ uint16_t adc_vbat;  // Current battery voltage: VBAT = (adc_vbat / 1023) * 3.0 *
 
 // Flags
 volatile input_state_type gSW;   // state of inputs (debounced)
-volatile uint8_t ir_trigger = FALSE;
-volatile uint8_t disable_timer = FALSE;
-volatile uint8_t low_battery = FALSE;
+uint8_t ir_trigger = FALSE;
+uint8_t disable_timer = FALSE;
+uint8_t low_battery = FALSE;
 
 
 /****************************************************************************
@@ -50,12 +50,17 @@ void interrupt isr(void)
 {
   static uint8_t tmr1_toggle = 0;
   
-  if (TMR0IF == 1)  // Timer 0: RC5 decoding (interrupt every 32.6ms)
+  /*if (INTF == 1)    // External INT
+  {
+    INTF = 0;
+  }*/
+  
+  if (TMR0IE == 1 && TMR0IF == 1)  // Timer 0: RC5 decoding (interrupt every 32.6ms)
   {
     TMR0IF = 0; // Clear the interrupt flag
   }
     
-  if (TMR1IF == 1)  // Timer 1: Accurate clock/timing (interrupt every 1/2 seconds)
+  if (TMR1IE == 1 && TMR1IF == 1)  // Timer 1: Accurate clock/timing (interrupt every 1/2 seconds)
 	{
     TMR1H = TMR1H_LOAD; // Reload Timer 1 overflow time
     TMR1L = TMR1L_LOAD;
@@ -83,11 +88,8 @@ void interrupt isr(void)
     }
 	}
 
-  if (IOCIF == 1) // Interrupt-on-Change
+  if (IOCIE == 1 && IOCIF == 1) // Interrupt-on-Change
   {
-    if (IOCBF)  // Pushbutton/DIP switches
-      IOCBF = 0;  // Clear all port B interrupt flags
-    
     if (NEC_DECODER_IOCxF)  // IR Decoder
     {
       NEC_DECODER_interruptHandler(); // IR Decoder processing
@@ -302,11 +304,11 @@ void hardware_init(void) 	// Configure hardware to a known state
   TRISC0 = INPUT;	  // nEN_FPGA 
 	
   // set unused GPIO
-  TRISA2 = OUTPUT;  // Configured later by NEC_DECODER_init()
+  TRISA2 = OUTPUT;  
   RA2 = LOW;
-  TRISB4 = OUTPUT;
+  TRISB4 = OUTPUT;  // Configured later by NEC_DECODER_init()
   RB4 = LOW;
-  TRISC1 = OUTPUT;
+  TRISC1 = OUTPUT;  
   RC1 = LOW;
   TRISC3 = OUTPUT;	
   RC3 = LOW;
@@ -363,14 +365,14 @@ void hardware_init(void) 	// Configure hardware to a known state
 
   // INT external interrupt
   OPTION_REGbits.INTEDG = 0;  // Interrupt on falling edge of INT
-  INTE = 1;                   // Enable interrupt
+  INTE = 0;                   // Disable interrupt
 
   // interrupt-on-change
   IOCAP = 0x00;         // Port A: No interrupt on change
-  IOCBP = 0x00;
-  IOCBP = 0b11100000;   // Port B, Positive edge detection ([7..5])
-  IOCBN = 0b11100000;   // Port B, Negative edge detection ([7..5])
-  IOCIE = 1;            // Enable interrupt
+  IOCAN = 0x00;
+  IOCBP = 0x00;         // Port B: No interrupt on change
+  IOCBN = 0x00;
+  IOCIE = 0;            // Disable interrupt
 
   // adc
   ANSELA = 0x00;        // Port A: All digital I/O or special function

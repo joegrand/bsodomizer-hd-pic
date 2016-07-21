@@ -27,7 +27,6 @@
 /* NEC Decoding status variables */
 static uint32_t NEC_DECODER_code = 0;
 static uint16_t NEC_DECODER_timeoutTimer = 0; // Timeout timer, unit [ms]
-static uint8_t NEC_DECODE_ready = FALSE;
 volatile APPLE_DECODE NEC_Decode; // structure to store NEC Decoder data
 
 
@@ -47,7 +46,7 @@ void NEC_DECODER_init(void) {
     NEC_DECODER_IOCxP = 1;  // Enable positive edge detect
     NEC_DECODER_IOCxN = 1;  // Enable negative edge detect
     NEC_DECODER_WPUx = 1;   // Enable weak pull-up
-    //OPTION_REG = 0x06; // Global Pull ups enabled, TMR0 = ON, 1:128 prescaler for 16MHz Fosc
+    IOCIE = 1;              // Enable interrupt
     dummy = NEC_GetPin();   // Clear mismatch
     NEC_DECODER_IOCxF = 0;  // Clear IOCx interrupt flag
 }
@@ -75,7 +74,7 @@ void NEC_DECODER_timeoutIncrement(void) {
     /* get current timer value */
     timer = NEC_GetTimer();
 
-    /* disable interrupts since nec_timeout_timer is also read and written to in ISR */
+    /* disable interrupts since nec_timeout_timer is also read and written in ISR */
     GIE = 0;
 
     if (NEC_DECODER_timeoutTimer < NEC_TIMEOUT) 
@@ -111,16 +110,16 @@ void NEC_DECODER_interruptHandler(void)
     /* Signal that Apple remote data is not valid (yet) */
     NEC_Decode.valid = FALSE;
 
-    /* get NEC pin status */
+    /* get pin status from IR receiver */
     nec_pin = NEC_GetPin();
 
     /* calculate time difference to last interrupt call */
     tdiff = NEC_GetTimer() - nec_timer;
 
-    /* start the RC5 timer again */
+    /* start the timer again */
     nec_timer = NEC_GetTimer();
 
-    /* if timeout counter has expired, i.e. no NEC signal was received for some */
+    /* if timeout counter has expired, i.e. no signal was received for some */
     /* time, reset the state machine */
     if (NEC_DECODER_timeoutTimer >= NEC_TIMEOUT) 
     {
