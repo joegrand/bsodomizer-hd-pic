@@ -62,9 +62,9 @@
 #define ADC_VBAT_MINIMUM    876 // 3.6V
 
 // Timer 1
-// load value = 65536 - (overflow_time / (1/32768))
-#define TMR1H_LOAD  0x00    // 2 seconds
-#define TMR1L_LOAD  0x00
+// load value = 65536 - (overflow_time / (1/125000))
+#define TMR1H_LOAD  0x0B    // 1/2 second
+#define TMR1L_LOAD  0xDC
 
 #define LOW         0
 #define HIGH        1

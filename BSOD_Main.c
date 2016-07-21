@@ -25,8 +25,6 @@
 volatile mode_type gMode = START_UP;
 
 // Clock/Timer
-volatile uint16_t gCounter = 0;   // Counter (incremented on every Timer 1 interrupt)
-
 struct time_struct
 {
   uint8_t hours;
@@ -49,20 +47,23 @@ uint8_t disable_timer = FALSE;
 
 void interrupt isr(void)
 {
+  static uint8_t tmr1_toggle = 0;
+  
   if (TMR0IF == 1)  // Timer 0: RC5 decoding (interrupt every 32.6ms)
   {
     TMR0IF = 0; // Clear the interrupt flag
   }
     
-  if (TMR1IF == 1)  // Timer 1: Accurate clock/timing (interrupt every 2 seconds)
+  if (TMR1IF == 1)  // Timer 1: Accurate clock/timing (interrupt every 1/2 seconds)
 	{
     TMR1H = TMR1H_LOAD; // Reload Timer 1 overflow time
     TMR1L = TMR1L_LOAD;
 		TMR1IF = 0;         // Clear the interrupt flag
-    ++gCounter; 				// Increment counter
-
+    tmr1_toggle = !tmr1_toggle; // Toggle this value every interrupt
+    
     // handle clock in 24-hour format
-    gClock.seconds += 2;
+    if (!tmr1_toggle) // Every other interrupt, increment the seconds
+      gClock.seconds += 1;
     if (gClock.seconds > 59)   // Check for seconds -> minutes overflow
     {
       gClock.seconds = 0;
@@ -132,10 +133,6 @@ void main(void)
         }*/
         break;
     }
-
-#ifndef __BSOD_DEBUG
-    //SLEEP();  // sleep after every pass to minimize current use (will wake on the next interrupt)
-#endif
 	}			
 }
 
@@ -350,11 +347,11 @@ void hardware_init(void) 	// Configure hardware to a known state
   TMR0IE = 1;                 // Enable interrupt
 
   // timer 1
-	// @ 32.768kHz, timer 1 will increment every 30.5uS and overflow every 2 seconds for full 16-bit count
-  T1CONbits.TMR1CS = 0b10;  // Clock source: Crystal oscillator on T1OSI/T1OSO
-  T1CONbits.T1CKPS = 0b00;  // Prescale 1:1
-  T1CONbits.T1OSCEN = 1;    // Enable dedicated Timer 1/LP oscillator circuit
-  T1CONbits.nT1SYNC = 1;    // Do not synchronize external clock input
+	// @ 125kHz, timer 1 will increment every 8uS
+  T1CONbits.TMR1CS = 0b00;  // Clock source: Internal instruction clock (Fosc/4)
+  T1CONbits.T1CKPS = 0b11;  // Prescale 1:8
+  T1CONbits.T1OSCEN = 0;    // Dedicated Timer 1 oscillator circuit disabled
+  T1CONbits.nT1SYNC = 0;    // Synchronize clock input
   T1GCON = 0x00;            // Disable gating
   T1CONbits.TMR1ON = 1;     // Turn on Timer 1
 	while (!T1OSCR);          // Wait for oscillator to start up and stabilize
