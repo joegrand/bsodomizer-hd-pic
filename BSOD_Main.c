@@ -115,9 +115,12 @@ void main(void)
       case START_UP:
         break;
       case TIMER_WAIT:
-        nEN_FPGA = LOW;
+        TRISC0 = INPUT;	  // nEN_FPGA 
         break;
       case FPGA_ON:
+        TRISC0 = OUTPUT;	// nEN_FPGA
+        nEN_FPGA = LOW;
+        
         /*adc_vbat = get_adc();
         if (adc_vbat >= ADC_VBAT_MINIMUM) // Ensure battery is sufficiently charged to provide power to FPGA circuitry
         {
@@ -142,51 +145,51 @@ void check_ir(void)
 {
   uint8_t timeoffset = 0;
   
-    // Check if data is available
-    if (NEC_Decode.valid == TRUE) 
-    {        
-      switch (NEC_Decode.command)
-      {
-        case APPLE_UP:
-        case APPLE_DOWN:
-          switch (gSW.dipswitches)
-          {
-            case SW_5MIN:
-              timeoffset = 1;
-              break;
-            case SW_10MIN:
-              timeoffset = 2;
-              break;
-            case SW_30MIN:
-              timeoffset = 5;
-              break;
-          }
-          if (NEC_Decode.command == APPLE_UP)
-          {
-            gClock.minutes += timeoffset;
-          }
-          else
-          {
-            gClock.minutes -= timeoffset;
-          }
-          break;
-        case APPLE_LEFT:
-          gClock = {0, 0, 0};
-          disable_timer = FALSE;
-          break;
-        case APPLE_RIGHT:
-          disable_timer = TRUE;
-          break;
-        case APPLE_CENTER:
-          ir_trigger = TRUE;
-          break;
-        case APPLE_MENU:
-          break;
-      }
-      NEC_Decode.valid = FALSE;
+  // Check if data is available
+  if (NEC_Decode.valid == TRUE) 
+  {        
+    switch (NEC_Decode.command)
+    {
+      case APPLE_UP:
+      case APPLE_DOWN:
+        switch (gSW.dipswitches)
+        {
+          case SW_5MIN:
+            timeoffset = 1;
+            break;
+          case SW_10MIN:
+            timeoffset = 2;
+            break;
+          case SW_30MIN:
+            timeoffset = 5;
+            break;
+        }
+        if (NEC_Decode.command == APPLE_UP)
+        {
+          gClock.minutes += timeoffset;
+        }
+        else
+        {
+          gClock.minutes -= timeoffset;
+        }
+        break;
+      case APPLE_LEFT:
+        gClock.hours = gClock.minutes = gClock.seconds = 0;
+        disable_timer = FALSE;
+        break;
+      case APPLE_RIGHT:
+        disable_timer = TRUE;
+        break;
+      case APPLE_CENTER:
+        ir_trigger = TRUE;
+        break;
+      case APPLE_MENU:
+        break;
     }
+    NEC_Decode.valid = FALSE;
+  }
     
-    NEC_DECODER_timeoutIncrement(); // update NEC decoder timeout timer
+  NEC_DECODER_timeoutIncrement(); // update NEC decoder timeout timer
 }
 
 /**************************************************************/
@@ -226,7 +229,7 @@ void change_mode(void)
   switch (gMode)
   {
    	case START_UP:
-      gClock = {0, 0, 0};
+      gClock.hours = gClock.minutes = gClock.seconds = 0;
    	  gMode = TIMER_WAIT;
       break;
 	case TIMER_WAIT:
@@ -238,7 +241,7 @@ void change_mode(void)
       }
       else if (!disable_timer)
       {
-        switch gSW.dipswitches
+        switch (gSW.dipswitches)
         {
           case SW_NONE:
             break;
@@ -298,10 +301,10 @@ void hardware_init(void) 	// Configure hardware to a known state
   TRISB6 = INPUT;   // SW_DIP0
   TRISB7 = INPUT; 	// SW_TEST
   TRISC2 = INPUT;   // VBAT_IN
-  TRISC0 = OUTPUT;	// EN_FPGA
+  TRISC0 = INPUT;	  // nEN_FPGA 
 	
   // set unused GPIO
-  TRISA2 = OUTPUT;  // Configured later by RC5_DECODER_init()
+  TRISA2 = OUTPUT;  // Configured later by NEC_DECODER_init()
   RA2 = LOW;
   TRISB4 = OUTPUT;
   RB4 = LOW;
@@ -317,9 +320,6 @@ void hardware_init(void) 	// Configure hardware to a known state
   RC6 = LOW;
   TRISC7 = OUTPUT;	
   RC7 = LOW;
-  
-  // set default pin states
-  nEN_FPGA = HIGH;  // active low
 
   // disable unused peripherals
   CLKRCON = 0x00;   // reference clock
@@ -347,7 +347,6 @@ void hardware_init(void) 	// Configure hardware to a known state
   OPTION_REGbits.TMR0SE = 0;  // Source edge select: Increment on low-to-high transition on T0CKI pin
   OPTION_REGbits.PSA = 0;     // Prescaler assigned to Timer 0
   OPTION_REGbits.PS = 0b110;  // Prescaler: 128
-  //TMR0 = TMR0_LOAD;           // Set Timer 0 overflow time
   TMR0IE = 1;                 // Enable interrupt
 
   // timer 1
@@ -357,7 +356,8 @@ void hardware_init(void) 	// Configure hardware to a known state
   T1CONbits.T1OSCEN = 1;    // Enable dedicated Timer 1/LP oscillator circuit
   T1CONbits.nT1SYNC = 1;    // Do not synchronize external clock input
   T1GCON = 0x00;            // Disable gating
-  timer1_on();              // Turn on Timer 1
+  T1CONbits.TMR1ON = 1;     // Turn on Timer 1
+	while (!T1OSCR);          // Wait for oscillator to start up and stabilize
   TMR1H = TMR1H_LOAD;       // Set Timer 1 overflow time
   TMR1L = TMR1L_LOAD;
   TMR1IE = 1;               // Enable interrupt
@@ -392,24 +392,6 @@ void hardware_init(void) 	// Configure hardware to a known state
 }
 
 
-/****************************************************************************
- ****************************** Timer/Clock *********************************
- ***************************************************************************/
-
-/*void timer1_off(void)	// Disable Timer 1
-{
-  T1CONbits.TMR1ON = 0;
-}*/
-
-/**************************************************************/
-
-void timer1_on(void)	// Enable Timer 1
-{
-  T1CONbits.TMR1ON = 1;
-
-	while (!T1OSCR);      // wait for oscillator to start up and stabilize
-}
-
 /**********************************************************
  ************************ ADC *****************************
  **********************************************************/
@@ -434,10 +416,3 @@ uint16_t get_adc(void)   // read voltage on ADC input
 
   return adc_value;
 }
-
-
-/****************************************************************************
- ************************ Utility Functions *********************************
- ***************************************************************************/
-
-
