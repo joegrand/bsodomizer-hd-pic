@@ -52,19 +52,19 @@
 ***************************************************************************/
 // pin assignments
 #define SW_DIP1     RB5		// Input
-#define SW_DIP0     RB6     // Input
+#define SW_DIP0     RB6   // Input
 #define SW_TEST     RB7		// Input
-#define nEN_FPGA    RC0		// Output
+#define nEN_FPGA    RC0		// Input for FPGA OFF, output low for FPGA ON
 
 // ADC
 // adc_value = (VBAT / 1.4) / 3.0 * 1023
-#define ADC_VBAT_MINIMUM    950 //   LTC3605 Step-Down Regulators on C5G require minimum 4V input
+// LTC3605 Step-Down Regulators on C5G require minimum 4V input (but work down to 3.4V)
+#define ADC_VBAT_MINIMUM    876 // 3.6V
 
 // Timer 1
 // load value = 65536 - (overflow_time / (1/32768))
 #define TMR1H_LOAD  0x00    // 2 seconds
 #define TMR1L_LOAD  0x00
-
 
 #define LOW         0
 #define HIGH        1
@@ -95,7 +95,7 @@ typedef enum	// operating mode
   FPGA_ON
 } mode_type;
 
-typedef enum 	// dipswitch values
+typedef enum 	// dip switch values
 {
   SW_NONE  = 0b00,
   SW_5MIN  = 0b01,
@@ -118,10 +118,6 @@ void hardware_init(void);
 void check_buttons(void);
 void change_mode(void);
 void check_ir(void);
-
-void timer1_off(void);
-void timer1_on(void);
-
 uint16_t get_adc(void);
 
 #endif /* __BSOD_MAIN_H__ */
