@@ -66,6 +66,14 @@
 #define TMR1H_LOAD  0x0B    // 1/2 second
 #define TMR1L_LOAD  0xDC
 
+// Timeout trigger & offset default values (minutes)
+#define TIMEOUT_TRIGGER_SML		5
+#define TIMEOUT_TRIGGER_MED		10
+#define TIMEOUT_TRIGGER_LGE		30
+#define TIMEOUT_OFFSET_SML		1
+#define TIMEOUT_OFFSET_MED		2
+#define TIMEOUT_OFFSET_LGE		5
+
 #define LOW         0
 #define HIGH        1
 
@@ -97,10 +105,10 @@ typedef enum	// operating mode
 
 typedef enum 	// dip switch values
 {
-  SW_NONE  = 0b00,
-  SW_5MIN  = 0b01,
-  SW_10MIN = 0b10,
-  SW_30MIN = 0b11
+  SW_NONE  	= 0b00,
+  SW_SML_TO = 0b01,
+  SW_MED_TO = 0b10,
+  SW_LGE_TO = 0b11
 } dipswitch_state_type;
 
 typedef struct	// state of the buttons/switches

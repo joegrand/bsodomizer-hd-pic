@@ -32,6 +32,9 @@ struct time_struct
   uint8_t seconds;
 } gClock = {0, 0, 0};  // Current time
 
+// Timeout trigger
+uint8_t timeout_trigger;
+
 // ADC
 uint16_t adc_vbat;  // Current battery voltage: VBAT = (adc_vbat / 1023) * 3.0 * 1.4
 
@@ -153,23 +156,37 @@ void check_ir(void)
       case APPLE_DOWN:
         switch (gSW.dipswitches)
         {
-          case SW_5MIN:
-            timeoffset = 1;
+          case SW_SML_TO:
+            timeoffset = TIMEOUT_OFFSET_SML;
             break;
-          case SW_10MIN:
-            timeoffset = 2;
+          case SW_MED_TO:
+            timeoffset = TIMEOUT_OFFSET_MED;
             break;
-          case SW_30MIN:
-            timeoffset = 5;
+          case SW_LGE_TO:
+            timeoffset = TIMEOUT_OFFSET_LGE;
             break;
         }
         if (getAppleCommand() == APPLE_UP)
         {
-          gClock.minutes += timeoffset;
+          if ((timeout_trigger + timeoffset) < timeout_trigger)	// protect against wraparound
+          {
+            timeout_trigger = 0xFF;
+          }
+          else
+          {
+            timeout_trigger += timeoffset;
+          }
         }
         else
         {
-          gClock.minutes -= timeoffset;
+          if ((timeout_trigger - timeoffset) > timeout_trigger)	// protect against wraparound
+          {
+            timeout_trigger = 0x00;
+          }
+          else
+          {
+            timeout_trigger -= timeoffset;
+          }
         }
         break;
       case APPLE_LEFT:
@@ -198,6 +215,24 @@ void check_buttons(void)
   
   if (SW_DIP1) dipSW |= 0b10;
   if (SW_DIP0) dipSW |= 0b01;
+  if (dipSW != gSW.dipswitches)	// if dipswitches have changed while running, reset the trigger time
+  {
+    switch (dipSW)
+    {
+      case SW_NONE:
+        timeout_trigger = 0;
+        break;
+      case SW_SML_TO:
+        timeout_trigger = TIMEOUT_TRIGGER_SML;
+        break;
+      case SW_MED_TO:
+        timeout_trigger = TIMEOUT_TRIGGER_MED;
+        break;
+      case SW_LGE_TO:
+        timeout_trigger = TIMEOUT_TRIGGER_LGE;
+        break;
+    }
+  }
   gSW.dipswitches = (dipswitch_state_type)dipSW;
 
   //debounce the test pushbutton
@@ -228,6 +263,21 @@ void change_mode(void)
   {
    	case START_UP:
       gClock.hours = gClock.minutes = gClock.seconds = 0;
+      switch (dipSW)
+      {
+        case SW_NONE:
+          timeout_trigger = 0;
+          break;
+        case SW_SML_TO:
+          timeout_trigger = TIMEOUT_TRIGGER_SML;
+          break;
+        case SW_MED_TO:
+          timeout_trigger = TIMEOUT_TRIGGER_MED;
+          break;
+        case SW_LGE_TO:
+          timeout_trigger = TIMEOUT_TRIGGER_LGE;
+          break;
+      }
    	  gMode = TIMER_WAIT;
       break;
 	case TIMER_WAIT: // wait for a trigger event (timer, IR, test button)
@@ -243,20 +293,8 @@ void change_mode(void)
         {
           case SW_NONE:
             break;
-          case SW_5MIN:
-            if (gClock.minutes >= 5)
-            {
-              gMode = FPGA_ON;
-            }
-            break;
-          case SW_10MIN:
-            if (gClock.minutes >= 10)
-            {
-              gMode = FPGA_ON;
-            }
-            break;
-          case SW_30MIN:
-            if (gClock.minutes >= 30)
+          default:
+            if (gClock.minutes >= timeout_trigger)
             {
               gMode = FPGA_ON;
             }
