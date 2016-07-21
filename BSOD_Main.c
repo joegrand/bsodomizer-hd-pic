@@ -39,6 +39,7 @@ uint16_t adc_vbat;  // Current battery voltage: VBAT = (adc_vbat / 1023) * 3.0 *
 volatile input_state_type gSW;   // state of inputs (debounced)
 uint8_t ir_trigger = FALSE;
 uint8_t disable_timer = FALSE;
+uint8_t low_battery = FALSE;
 
 
 /****************************************************************************
@@ -119,17 +120,16 @@ void main(void)
         TRISC0 = INPUT;	  // nEN_FPGA 
         break;
       case FPGA_ON:
-        TRISC0 = OUTPUT;	// nEN_FPGA
-        nEN_FPGA = LOW;
-        
         /*adc_vbat = get_adc();
         if (adc_vbat >= ADC_VBAT_MINIMUM) // Ensure battery is sufficiently charged to provide power to FPGA circuitry
-        {
-          nEN_FPGA = LOW;
-        }
+        {*/
+          TRISC0 = OUTPUT;	// nEN_FPGA
+          nEN_FPGA = LOW;   // Enable FPGA circuitry
+          low_battery = FALSE;
+        /*}
         else
         { 
-          nEN_FPGA = HIGH;
+          low_battery = TRUE;
         }*/
         break;
     }
@@ -145,7 +145,7 @@ void check_ir(void)
   // Check if data is available
   if (hasValidDecode() == TRUE) 
   {        
-    switch (getAppleCommand)
+    switch (getAppleCommand())
     {
       case APPLE_UP:
       case APPLE_DOWN:
@@ -161,7 +161,7 @@ void check_ir(void)
             timeoffset = 5;
             break;
         }
-        if (getAppleCommand == APPLE_UP)
+        if (getAppleCommand() == APPLE_UP)
         {
           gClock.minutes += timeoffset;
         }
@@ -183,7 +183,8 @@ void check_ir(void)
       case APPLE_MENU:
         break;
     }
-    resetDecode;
+    
+    resetDecode();
   }
     
   NEC_DECODER_timeoutIncrement(); // update NEC decoder timeout timer
@@ -263,7 +264,7 @@ void change_mode(void)
         }
       }
     case FPGA_ON:
-      if ((gSW.buttonevent && gSW.button) || ir_trigger)
+      if ((gSW.buttonevent && gSW.button) || ir_trigger || low_battery)
       {
         gMode = START_UP;
         gSW.buttonevent = FALSE;
