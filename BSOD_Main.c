@@ -5,7 +5,7 @@
 // Author: 	  Joe Grand [www.grandideastudio.com] and Zoz
 //
 // Description: Main file for the BSODomizer HD Front End Subsystem
-// Processor: 	Microchip PIC16LF1828
+// Processor: 	Microchip PIC16LF1829
 // Compiler: 	  MPLAB X IDE v3.35 w/ Microchip XC8 v1.38 (Free mode)
 //
 // Distributed under a Creative Commons Attribution 3.0 United States license
@@ -37,9 +37,10 @@ uint16_t adc_vbat;  // Current battery voltage: VBAT = (adc_vbat / 1023) * 3.0 *
 
 // Flags
 volatile input_state_type gSW;   // state of inputs (debounced)
-uint8_t ir_trigger = FALSE;
-uint8_t disable_timer = FALSE;
-uint8_t low_battery = FALSE;
+volatile uint8_t ir_decode = FALSE;
+volatile uint8_t ir_trigger = FALSE;
+volatile uint8_t disable_timer = FALSE;
+volatile uint8_t low_battery = FALSE;
 
 
 /****************************************************************************
@@ -83,14 +84,14 @@ void interrupt isr(void)
     }
 	}
 
-  if (IOCIF == 1) // Interrupt-on-Change (used to wake from sleep)
+  if (IOCIF == 1) // Interrupt-on-Change
   {
     if (IOCBF)  // Pushbutton/DIP switches
       IOCBF = 0;  // Clear all port B interrupt flags
     
     if (NEC_DECODER_IOCxF)  // IR Decoder
     {
-        NEC_DECODER_interruptHandler(); // IR Decoder processing
+        ir_decode = TRUE;
         NEC_DECODER_IOCxF = 0;          // Clear IOC flag
     }
   }
@@ -142,6 +143,11 @@ void check_ir(void)
 {
   uint8_t timeoffset = 0;
   
+  if (ir_decode == TRUE)
+  {
+    NEC_DECODER_interruptHandler(); // IR Decoder processing
+  }
+  
   // Check if data is available
   if (hasValidDecode() == TRUE) 
   {        
@@ -185,6 +191,7 @@ void check_ir(void)
     }
     
     resetDecode();
+    ir_decode = FALSE;
   }
     
   NEC_DECODER_timeoutIncrement(); // update NEC decoder timeout timer
@@ -196,8 +203,8 @@ void check_buttons(void)
 {
   uint8_t dipSW = 0;
   
-  if (!SW_DIP1) dipSW |= 0b10;
-  if (!SW_DIP0) dipSW |= 0b01;
+  if (SW_DIP1) dipSW |= 0b10;
+  if (SW_DIP0) dipSW |= 0b01;
   gSW.dipswitches = (dipswitch_state_type)dipSW;
 
   //debounce the test pushbutton
@@ -230,7 +237,7 @@ void change_mode(void)
       gClock.hours = gClock.minutes = gClock.seconds = 0;
    	  gMode = TIMER_WAIT;
       break;
-	case TIMER_WAIT:
+	case TIMER_WAIT: // wait for a trigger event (timer, IR, test button)
       if ((gSW.buttonevent && gSW.button) || ir_trigger)
       {
         gMode = FPGA_ON;
@@ -336,6 +343,7 @@ void hardware_init(void) 	// Configure hardware to a known state
   CCP3CON = 0x00;   // CCP3
   CCP4CON = 0x00;   // CCP4
   SSP1CON1 = 0x00;  // SSP1
+  SSP2CON1 = 0x00;  // SSP2
   CPSCON0 = 0x00;   // capacitive sensing
 
 	// timer 0/rtcc

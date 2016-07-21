@@ -149,24 +149,22 @@ void NEC_DECODER_interruptHandler(void)
          }
          else // otherwise go back to waiting for the prepulse
          {		
-              NEC_DECODE_state = STATE_WAIT_PREPULSE;
+           NEC_DECODE_state = STATE_WAIT_PREPULSE;
          }
          break;
-        case STATE_READING_DATA:
-          /* do nothing on rising edge of NEC signal */
-          /* clock in bits on falling edge of NEC signal */
-          if ((nec_pin_old != FALSE) && (nec_pin == FALSE)) 
-          {
-            nec_pos++;
-            NEC_DECODER_code <<= 1;
-            if (tdiff >= NEC_BIT) // long pulses are ones; otherwise low bit is already zero
-            {	
-              NEC_DECODER_code |= 1;
-            }
-          }
-          break;
-      default:
-        break;
+      case STATE_READING_DATA:
+         /* do nothing on rising edge of NEC signal */
+         /* clock in bits on falling edge of NEC signal */
+         if ((nec_pin_old != FALSE) && (nec_pin == FALSE)) 
+         {
+           nec_pos++;
+           NEC_DECODER_code <<= 1;
+           if (tdiff >= NEC_BIT) // long pulses are ones; otherwise low bit is already zero
+           {	
+             NEC_DECODER_code |= 1;
+           }
+         }
+         break;
     }
 
     /* save current pin state for edge type detection */
@@ -178,18 +176,17 @@ void NEC_DECODER_interruptHandler(void)
         NEC_Decode.valid = TRUE; // Signal that valid NEC data was loaded
         NEC_Decode.command = NEC_DECODER_getCmd(NEC_DECODER_code); // Populate command from Apple Remote (ignore the rest of the bits)
         NEC_DECODE_state = STATE_WAIT_PREPULSE;
-        nec_pos = 0;
     }
 }
 
 uint8_t hasValidDecode(void)
 {
-  return NEC_Decode.valid;
+  return (NEC_Decode.valid);
 }
 
 apple_cmd_type getAppleCommand(void)
 {
-  return NEC_Decode.command;
+  return (NEC_Decode.command);
 }
 
 void resetDecode(void)
