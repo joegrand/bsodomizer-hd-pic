@@ -33,16 +33,16 @@ struct time_struct
 } gClock = {0, 0, 0};  // Current time
 
 // Timeout trigger
-uint8_t timeout_trigger;
+uint8_t timeout_trigger;  // Number of minutes until trigger (FPGA enable)
 
 // ADC
 uint16_t adc_vbat;  // Current battery voltage: VBAT = (adc_vbat / 1023) * 3.0 * 1.4
 
-// Flags
+// Flags (to communicate between functions and state change)
 volatile input_state_type gSW;   // state of inputs (debounced)
-uint8_t ir_trigger = FALSE;
-uint8_t disable_timer = FALSE;
-uint8_t low_battery = FALSE;
+uint8_t ir_trigger = FALSE;      // trigger received via IR (center button)
+uint8_t disable_timer = FALSE;   // timer disabled via IR
+uint8_t low_battery = FALSE;     // battery is below defined threshold
 
 
 /****************************************************************************
@@ -52,18 +52,13 @@ uint8_t low_battery = FALSE;
 void interrupt isr(void)
 {
   static uint8_t tmr1_toggle = 0;
-  
-  if (INTF == 1)    // External INT
-  {
-    INTF = 0;
-  }
-  
+   
   if (TMR0IE == 1 && TMR0IF == 1)  // Timer 0: RC5 decoding (interrupt every 32.6ms)
   {
     TMR0IF = 0; // Clear the interrupt flag
   }
     
-  if (TMR1IE == 1 && TMR1IF == 1)  // Timer 1: Accurate clock/timing (interrupt every 1/2 seconds)
+  if (TMR1IE == 1 && TMR1IF == 1)  // Timer 1: Clock/timing (interrupt every 1/2 seconds)
 	{
     TMR1H = TMR1H_LOAD; // Reload Timer 1 overflow time
     TMR1L = TMR1L_LOAD;
@@ -122,20 +117,20 @@ void main(void)
       case START_UP:
         break;
       case TIMER_WAIT:
-        TRISC0 = INPUT;	  // nEN_FPGA 
+        nEN_FPGA = HIGH;  // C5G FPGA board off until triggered 
         break;
       case FPGA_ON:
-        /*adc_vbat = get_adc();
-        if (adc_vbat >= ADC_VBAT_MINIMUM) // Ensure battery is sufficiently charged to provide power to FPGA circuitry
-        {*/
-          TRISC0 = OUTPUT;	// nEN_FPGA
+        adc_vbat = get_adc();
+        // Ensure battery is sufficiently charged to provide power to FPGA circuitry
+        if (adc_vbat >= ADC_VBAT_MINIMUM) 
+        {
           nEN_FPGA = LOW;   // Enable FPGA circuitry
           low_battery = FALSE;
-        /*}
+        }
         else
         { 
           low_battery = TRUE;
-        }*/
+        }
         break;
     }
 	}			
@@ -154,7 +149,7 @@ void check_ir(void)
     {
       case APPLE_UP:
       case APPLE_DOWN:
-        switch (gSW.dipswitches)
+        switch (gSW.dipswitches) // Adjust the time offset depending on currently selected time duration
         {
           case SW_SML_TO:
             timeoffset = TIMEOUT_OFFSET_SML;
@@ -166,7 +161,7 @@ void check_ir(void)
             timeoffset = TIMEOUT_OFFSET_LGE;
             break;
         }
-        if (getAppleCommand() == APPLE_UP)
+        if (getAppleCommand() == APPLE_UP) // Increase trigger time
         {
           if ((timeout_trigger + timeoffset) < timeout_trigger)	// protect against wraparound
           {
@@ -174,10 +169,10 @@ void check_ir(void)
           }
           else
           {
-            timeout_trigger += timeoffset;
+            timeout_trigger += timeoffset; // increase time like adding time to a microwave
           }
         }
-        else
+        else // Decrease trigger time
         {
           if ((timeout_trigger - timeoffset) > timeout_trigger)	// protect against wraparound
           {
@@ -185,25 +180,25 @@ void check_ir(void)
           }
           else
           {
-            timeout_trigger -= timeoffset;
+            timeout_trigger -= timeoffset; // decrease time (will trigger sooner)
           }
         }
         break;
-      case APPLE_LEFT:
+      case APPLE_LEFT:    // Reset and re-enable the timer
         gClock.hours = gClock.minutes = gClock.seconds = 0;
         disable_timer = FALSE;
         break;
-      case APPLE_RIGHT:
+      case APPLE_RIGHT:   // Disable the timer
         disable_timer = TRUE;
         break;
-      case APPLE_CENTER:
+      case APPLE_CENTER:  // Trigger FPGA on/off
         ir_trigger = TRUE;
         break;
-      case APPLE_MENU:
+      case APPLE_MENU:    // Reserved for future use
         break;
     }
     
-    resetDecode();
+    resetDecode(); // Reset the command after event has been handled (to avoid repeats)
   }
 }
 
@@ -213,22 +208,22 @@ void check_buttons(void)
 {
   uint8_t dipSW = 0;
   
-  if (SW_DIP1) dipSW |= 0b10;
+  if (SW_DIP1) dipSW |= 0b10;  // get state of DIP switches
   if (SW_DIP0) dipSW |= 0b01;
-  if (dipSW != gSW.dipswitches)	// if dipswitches have changed while running, reset the trigger time
+  if (dipSW != gSW.dipswitches)	// if DIP switches have changed while running, reset the trigger time
   {
     switch (dipSW)
     {
-      case SW_NONE:
+      case SW_NONE:   // Timer disabled
         timeout_trigger = 0;
         break;
-      case SW_SML_TO:
+      case SW_SML_TO: // Small trigger duration
         timeout_trigger = TIMEOUT_TRIGGER_SML;
         break;
-      case SW_MED_TO:
+      case SW_MED_TO: // Medium trigger duration
         timeout_trigger = TIMEOUT_TRIGGER_MED;
         break;
-      case SW_LGE_TO:
+      case SW_LGE_TO: // Large trigger duration
         timeout_trigger = TIMEOUT_TRIGGER_LGE;
         break;
     }
@@ -236,22 +231,23 @@ void check_buttons(void)
   gSW.dipswitches = (dipswitch_state_type)dipSW;
 
   //debounce the test pushbutton
-  if (!SW_TEST)
+  if (!SW_TEST && (gSW.button == FALSE))  // state change from high to low
   {
-    __delay_ms(50);  // debounce delay must be > than worst case switch bounce
-    if (gSW.button == SW_TEST)
+    __delay_ms(20);  // debounce delay must be > than worst case switch bounce
+    if (!SW_TEST)
     {
       gSW.buttonevent = TRUE;
+      gSW.button = TRUE;
     }
-    gSW.button = !SW_TEST;
   }
-  else
+  else if (SW_TEST && (gSW.button == TRUE)) // state change from low to high
   {
-    if (gSW.button != SW_TEST)
+    __delay_ms(20);  // debounce delay must be > than worst case switch bounce
+    if (SW_TEST)
     {
       gSW.buttonevent = TRUE;
+      gSW.button = FALSE;
     }
-  	gSW.button = FALSE;
   }
 }
 
@@ -262,8 +258,8 @@ void change_mode(void)
   switch (gMode)
   {
    	case START_UP:
-      gClock.hours = gClock.minutes = gClock.seconds = 0;
-      switch (dipSW)
+      gClock.hours = gClock.minutes = gClock.seconds = 0;  // reset clock
+      switch (gSW.dipswitches)
       {
         case SW_NONE:
           timeout_trigger = 0;
@@ -287,20 +283,21 @@ void change_mode(void)
         gSW.buttonevent = FALSE;
         ir_trigger = FALSE;
       }
-      else if (!disable_timer)
+      else if (!disable_timer) // if the timer is enabled
       {
         switch (gSW.dipswitches)
         {
           case SW_NONE:
             break;
           default:
-            if (gClock.minutes >= timeout_trigger)
+            if (gClock.minutes >= timeout_trigger) // check time against remaining trigger duration
             {
               gMode = FPGA_ON;
             }
             break;
         }
       }
+      break;
     case FPGA_ON:
       if ((gSW.buttonevent && gSW.button) || ir_trigger || low_battery)
       {
@@ -337,7 +334,7 @@ void hardware_init(void) 	// Configure hardware to a known state
   TRISB6 = INPUT;   // SW_DIP0
   TRISB7 = INPUT; 	// SW_TEST
   TRISC2 = INPUT;   // VBAT_IN
-  TRISC0 = INPUT;	  // nEN_FPGA 
+  TRISC0 = OUTPUT;	// nEN_FPGA 
 	
   // set unused GPIO
   TRISA2 = OUTPUT;  
@@ -357,6 +354,9 @@ void hardware_init(void) 	// Configure hardware to a known state
   TRISC7 = OUTPUT;	
   RC7 = LOW;
 
+  // set default pin states
+	nEN_FPGA = HIGH;  // C5G FPGA board off until triggered
+  
   // disable unused peripherals
   CLKRCON = 0x00;   // reference clock
   WDTCON = 0x00;    // watchdog timer
@@ -414,13 +414,13 @@ void hardware_init(void) 	// Configure hardware to a known state
   ANSELA = 0x00;        // Port A: All digital I/O or special function
   ANSELB = 0x00;        // Port B: All digital I/O or special function
   ANSELC = 0b00000100;  // Port C: RC2/AN6 analog, all others digital I/O or special function
-
-  ADCON0bits.ADON = 0;      // Start with ADC off
   ADCON0bits.CHS = 0b00110; // AN6
   ADCON1bits.ADPREF = 0b00; // Vref+ = VDD
   ADCON1bits.ADNREF = 0;    // Vref- = VSS
   ADCON1bits.ADFM = 1;      // Right justified
   ADCON1bits.ADCS = 0b001;  // Conversion clock: Internal (Fosc / 8), Tad = 2uS
+  ADCON0bits.ADON = 1;      // Turn on ADC
+  __delay_us(2);            // Acquisition delay
   ADIE = 0;                 // Disable interrupt
 		
 	// enable interrupts
@@ -438,8 +438,6 @@ uint16_t get_adc(void)   // read voltage on ADC input
   uint8_t   i;
   uint16_t  adc_value;		// ADC result (10-bit)
 
-  ADCON0bits.ADON = 1;    // turn on the ADC
-
   adc_value = 0;
   for (i = 0; i < 4; ++i)	// take multiple samples & average to reduce noise
   {
@@ -448,8 +446,6 @@ uint16_t get_adc(void)   // read voltage on ADC input
     adc_value += ((ADRESH << 8) + ADRESL);  // store A/D value
   }
   adc_value >>= 2;      // calculate the average
-
-  ADCON0bits.ADON = 0;  // turn ADC off to save power
 
   return adc_value;
 }
