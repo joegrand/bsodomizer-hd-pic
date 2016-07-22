@@ -15,7 +15,7 @@
 #ifndef __BSOD_MAIN_H__
 #define __BSOD_MAIN_H__
 
-#define __BSOD_DEBUG            // #define for debug capability
+//#define __BSOD_DEBUG            // #define for debug capability
 #define _XTAL_FREQ  4000000     // oscillator frequency for __delay_xx() macros
 
 /**************************************************************************
@@ -54,7 +54,7 @@
 #define SW_DIP1     RB5		// Input
 #define SW_DIP0     RB6   // Input
 #define SW_TEST     RB7		// Input
-#define nEN_FPGA    RC0		// Input for FPGA OFF, output low for FPGA ON
+#define nEN_FPGA    RC0		// Output
 
 // ADC
 // adc_value = (VBAT / 1.4) / 3.0 * 1023
@@ -66,7 +66,7 @@
 #define TMR1H_LOAD  0x0B    // 1/2 second
 #define TMR1L_LOAD  0xDC
 
-// Timeout trigger & offset default values (minutes)
+// Timeout trigger & offset default values (in minutes)
 #define TIMEOUT_TRIGGER_SML		5
 #define TIMEOUT_TRIGGER_MED		10
 #define TIMEOUT_TRIGGER_LGE		30
@@ -98,9 +98,9 @@
 
 typedef enum	// operating mode
 {
-  START_UP,
-  TIMER_WAIT,
-  FPGA_ON
+  START_UP,     // Start up
+  TIMER_WAIT,   // Wait for trigger
+  FPGA_ON       // BSODomy in action
 } mode_type;
 
 typedef enum 	// dip switch values
@@ -117,6 +117,7 @@ typedef struct	// state of the buttons/switches
 	uint8_t button;
 	uint8_t buttonevent;
 } input_state_type;
+
 
 /***********************************************************************
  ************************** Function prototypes ************************

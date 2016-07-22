@@ -25,7 +25,7 @@
 #include "IR_Decoder.h"
 
 /* NEC Decoding status variables */
-static uint32_t NEC_DECODER_code = 0;
+static uint32_t NEC_DECODER_code = 0;  // currently received data
 volatile APPLE_DECODE NEC_Decode; // structure to store NEC Decoder data
 
 
@@ -88,14 +88,14 @@ void NEC_DECODER_interruptHandler(void)
         nec_pos = 0;
         if ((nec_pin_old == FALSE) && (nec_pin != FALSE)) // if a rising edge (end of prepulse)
         {     
-          if (tdiff >= NEC_PREPULSE)
+          if (tdiff >= NEC_PREPULSE) // if pulse is wider than leading pulse burst
           {
             NEC_DECODE_state = STATE_WAIT_SPACE;
           }
         }
         break;
       case STATE_WAIT_SPACE:
-        if (tdiff >= NEC_SPACE) // if the space is the correct length
+        if (tdiff >= NEC_SPACE) // if the space between leading pulse and data is the correct length
         {	
           NEC_DECODE_state = STATE_READING_DATA;
          }
@@ -111,7 +111,7 @@ void NEC_DECODER_interruptHandler(void)
          {
            nec_pos++;
            NEC_DECODER_code <<= 1;
-           if (tdiff >= NEC_TIMEOUT) // if received pulse is too long, we're out of sync so abort
+           if (tdiff >= NEC_TIMEOUT) // if received pulse is too long, we're out of sync, so abort
            {
              NEC_DECODE_state = STATE_WAIT_PREPULSE;
            }

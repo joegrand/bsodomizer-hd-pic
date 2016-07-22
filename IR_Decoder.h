@@ -55,12 +55,12 @@
 
 typedef enum	// 7-bit command 
 {
-  APPLE_UP      = 0x05,   // Increase trigger time
-  APPLE_DOWN    = 0x06,   // Decrease trigger time
-  APPLE_LEFT    = 0x04,   // Reset and re-enable the timer
-  APPLE_RIGHT   = 0x03,   // Disable the timer
-  APPLE_CENTER  = 0x02,   // Trigger FPGA on/off
-  APPLE_MENU    = 0x01,   // Reserved for future use
+  APPLE_UP      = 0x05,
+  APPLE_DOWN    = 0x06,
+  APPLE_LEFT    = 0x04,
+  APPLE_RIGHT   = 0x03,
+  APPLE_CENTER  = 0x02,
+  APPLE_MENU    = 0x01,   
 } apple_cmd_type;
 
 /*--- Apple remote data structure ---*/
